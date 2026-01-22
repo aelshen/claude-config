@@ -1,0 +1,156 @@
+# Claude Code Configuration
+
+Custom agent workflow configuration for intelligent development assistance.
+
+## Intelligent Agent Workflow
+
+You have access to custom sub-agents that provide specialized capabilities. Use them intelligently based on the development lifecycle stage.
+
+### When to Use the Workflow Orchestrator
+
+The **workflow-orchestrator** agent is your master coordinator for comprehensive quality assurance. Use it:
+
+**After Major Implementation Work:**
+- "Use workflow-orchestrator to review the new authentication system"
+- "Run workflow-orchestrator on the agent deployment API"
+- Automatically after completing features >100 LOC
+
+**Before Key Milestones:**
+- "workflow-orchestrator: prepare for deployment review"
+- "workflow-orchestrator: pre-merge quality check"
+
+**When Requested:**
+- "Run full quality checks"
+- "Comprehensive review of recent changes"
+
+The orchestrator will intelligently select and coordinate 3-8 agents based on context, typically completing in 5-10 minutes.
+
+### Direct Agent Usage (Faster, Targeted)
+
+For specific concerns, invoke agents directly instead of the orchestrator:
+
+#### Quick Reality Checks (1-2 minutes)
+```
+"Use oathkeeper to validate this authentication implementation"
+```
+- When you suspect claimed completion isn't real
+- Before marking tasks as done
+- After integration of complex components
+
+#### Compliance & Tracking (1 minute)
+```
+"Use project-manager to update checklist and verify compliance"
+```
+- After completing checklist items
+- To get project status
+- When code might deviate from CLAUDE.md patterns
+
+#### Simplicity Review (1-2 minutes)
+```
+"Use code-quality-pragmatist to review for over-engineering"
+```
+- After implementing abstractions or patterns
+- When solution feels complex
+- After refactoring
+
+#### Deep Debugging (3-5 minutes)
+```
+"Use ultrathink-debugger to investigate these 500 errors"
+```
+- When bugs are mysterious or intermittent
+- For production issues
+- When initial debugging attempts fail
+
+### Automatic Triggers (Future Enhancement)
+
+**Note**: Automatic hooks are a planned feature, not yet implemented. For now, manually invoke agents as needed.
+
+**Future: Post-Implementation Hook** (planned):
+After writing significant code (>50 LOC), would automatically run:
+1. oathkeeper (verify it works)
+2. code-quality-pragmatist (prevent over-engineering)
+
+**Future: Pre-Commit Hook** (planned):
+Before git commits, would run:
+1. project-manager (compliance check)
+
+**Future: Pre-PR Hook** (planned):
+Before creating pull requests, would run:
+1. workflow-orchestrator in "standard" mode
+
+**Current Workaround**: Manually run these agents before commits/PRs using direct commands.
+
+### Decision Guide: When to Use What
+
+| Situation | Recommended Approach | Time | Agents |
+|-----------|---------------------|------|---------|
+| Small bug fix (<50 LOC) | Direct: oathkeeper + code-quality | 2-3 min | 2 |
+| Feature implementation | Orchestrator: Standard Track | 5-7 min | 5-6 |
+| Major feature/refactor | Orchestrator: Comprehensive | 8-12 min | 7-9 |
+| Pre-deployment check | Orchestrator: Comprehensive | 8-12 min | 8-10 |
+| Debugging complex issue | Direct: ultrathink-debugger | 3-5 min | 1 |
+| Quick status check | Direct: project-manager | 1 min | 1 |
+
+### Available Custom Agents
+
+**Quality & Validation:**
+- **workflow-orchestrator** - Master coordinator for comprehensive QA
+- **oathkeeper** - Reality check for actual vs claimed completion
+- **code-quality-pragmatist** - Review for over-engineering and unnecessary complexity
+
+**Project Management:**
+- **project-manager** - Track progress, update checklists, verify compliance
+
+**Debugging & Analysis:**
+- **ultrathink-debugger** - Deep debugging for complex issues
+
+### Best Practices
+
+1. **Start with Reality Check**: Always run oathkeeper before celebrating completion
+2. **Don't Over-Orchestrate**: For quick changes, use direct agents instead of orchestrator
+3. **Parallel Thinking**: Orchestrator runs compatible agents in parallel for speed
+4. **Context Matters**: Orchestrator adapts to what you built (API vs UI vs Infrastructure)
+5. **Fix Critical First**: If oathkeeper finds breakage, fix before running other reviews
+6. **Iterate**: Re-run specific agents after fixing issues rather than full orchestration
+
+### Execution Examples
+
+**Example 1: After implementing new API endpoint**
+```
+You: "I implemented the /api/agents/deploy endpoint with JWT auth"
+Claude: "Let me use workflow-orchestrator to run comprehensive reviews"
+[Runs: oathkeeper → project-manager → Parallel(code-quality-pragmatist) → additional checks]
+[Total: ~6 minutes, validates implementation, checks for over-engineering]
+```
+
+**Example 2: Quick bug fix**
+```
+You: "Fixed the null pointer bug in task processor"
+Claude: "Let me verify with oathkeeper and code-quality-pragmatist"
+[Runs: oathkeeper → code-quality]
+[Total: ~2 minutes, confirms fix works, no over-engineering]
+```
+
+**Example 3: Debugging production issue**
+```
+You: "Users reporting 500 errors on checkout for certain payment amounts"
+Claude: "I'll use ultrathink-debugger to investigate this edge case"
+[Runs: ultrathink-debugger with deep analysis]
+[Total: ~4 minutes, identifies currency rounding bug]
+```
+
+## Communication Preferences
+
+- Be concise and direct
+- Use bullet points for clarity
+- Provide file:line references for code issues
+- Prioritize Critical > High > Medium > Low
+- Acknowledge strengths alongside improvements
+
+## Code Quality Philosophy
+
+- Favor simplicity over theoretical best practices
+- Question abstractions that don't deliver clear value
+- Prefer working code over perfect architecture
+- Balance pragmatism with maintainability
+- Ship features, iterate on improvements
