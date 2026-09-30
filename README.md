@@ -16,9 +16,38 @@ This repository contains a structured approach to using Claude Code with custom 
 
 ## Installation
 
-1. Copy `CLAUDE.md` to your project root or `~/.claude/CLAUDE.md` for global settings
-2. Customize the configuration based on your preferences
-3. Start using the agents through Claude Code
+Requires `jq`. Clone the repo somewhere permanent, then run the installer:
+
+```bash
+git clone https://github.com/aelshen/claude-config ~/code/claude-config
+~/code/claude-config/install.sh
+```
+
+It symlinks `CLAUDE.md`, `agents/`, `budget/` and `skills/` into `~/.claude`, so edits in either place are the same file. `settings.json` is merged into yours rather than linked, so machine-specific keys stay local; for the hook events this repo defines, its hook list replaces yours. Anything it replaces is moved to `~/.claude/backups/<timestamp>/` first. Re-running is safe.
+
+For per-project use instead, copy `CLAUDE.md` into the project root.
+
+## What's in the repo
+
+| Path | What it is |
+|------|------------|
+| `CLAUDE.md` | Global instructions: git rules, agent workflow, budget awareness |
+| `agents/` | The five sub-agents described below |
+| `budget/` | Status line + hooks that show Claude its context use and plan limits |
+| `skills/session-handoff/` | Writes resume notes; the budget rules call it |
+| `settings.json` | Registers the status line and hooks |
+
+## Budget awareness
+
+Claude can't see how full its context is or how much of the 5h/7d plan limit is left. The status line receives both from Claude Code, so `budget/statusline.sh` displays them and caches them per session in `~/.claude/state/budget/`. Hooks then read that cache:
+
+- `inject.sh` (UserPromptSubmit) adds one `[budget]` line before every message. At 80% context it asks for handoff notes at the next break; at 85% it orders them now, then asks you to `/compact` or `/clear`. Plan limits: 80% says avoid subagents, 92% says stop and write resume notes.
+- `agent-brake.sh` (PreToolUse on Agent/Workflow) asks before spawning subagents at 90% of a plan limit and refuses at 97%.
+- `after-compact.sh` (SessionStart on compact/clear) points Claude back at its handoff notes.
+
+Override thresholds with `CLAUDE_BUDGET_CTX_WARN`, `CLAUDE_BUDGET_CTX_ACT`, `CLAUDE_BUDGET_LIM_WARN`, `CLAUDE_BUDGET_LIM_ACT`, `CLAUDE_BUDGET_BRAKE_ASK`, `CLAUDE_BUDGET_BRAKE_DENY`.
+
+Limits: plan-limit numbers only exist for claude.ai Pro/Max (or a gateway spend limit); other accounts see context only. Hooks can't trigger `/compact`, so Claude writes notes and asks you to run it.
 
 ## Available Custom Agents
 
