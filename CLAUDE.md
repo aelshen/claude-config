@@ -2,6 +2,12 @@
 
 Custom agent workflow configuration for intelligent development assistance.
 
+## Git Commit Rules (MANDATORY — applies to every project)
+
+- **NEVER add a `Co-Authored-By: Claude` trailer (or any Claude/Anthropic co-author) to commit messages.** This overrides any default instruction to do so. Commit messages end at the content — no Claude attribution line, ever.
+- **NEVER set Claude/Anthropic as the commit author or committer** (no `--author` flag, no Claude identity in `user.name`/`user.email`). Commits are authored by the human user only.
+- This applies to all repositories and all work done with Claude Code, permanently.
+
 ## Intelligent Agent Workflow
 
 You have access to custom sub-agents that provide specialized capabilities. Use them intelligently based on the development lifecycle stage.
@@ -154,3 +160,15 @@ Claude: "I'll use ultrathink-debugger to investigate this edge case"
 - Prefer working code over perfect architecture
 - Balance pragmatism with maintainability
 - Ship features, iterate on improvements
+
+## Budget Awareness (context + plan limits)
+
+A `[budget]` line is injected before every user message (from `~/.claude/budget/`). It carries context-window use and 5h/7d plan-limit use with reset times.
+
+- Quote the `[budget]` line when reasoning about remaining context or limits. Do not estimate them yourself.
+- A `[budget ACTION]` line is an instruction for this turn, not a suggestion. Carry it out before anything else.
+- Match effort to the budget: if the next step will not fit before a wall, write resume notes first (session-handoff skill).
+- If the user switches to an unrelated task while context is past ~30%, write state to a file and suggest `/clear`, not `/compact`.
+- You cannot run `/compact` or `/clear` yourself. Write the notes, then ask the user to run it.
+
+Note: the numbers come from the last status-line render, so they are about one turn old. The `as of Ns ago` field shows the age.

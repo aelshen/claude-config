@@ -1,0 +1,18 @@
+{
+  "statusLine": {
+    "type": "command",
+    "command": "$HOME/.claude/budget/statusline.sh",
+    "refreshInterval": 60
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      { "hooks": [{ "type": "command", "command": "$HOME/.claude/budget/inject.sh" }] }
+    ],
+    "PreToolUse": [
+      { "matcher": "Agent|Workflow", "hooks": [{ "type": "command", "command": "$HOME/.claude/budget/agent-brake.sh" }] }
+    ],
+    "SessionStart": [
+      { "matcher": "compact|clear", "hooks": [{ "type": "command", "command": "$HOME/.claude/budget/after-compact.sh" }] }
+    ]
+  }
+}

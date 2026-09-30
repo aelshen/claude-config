@@ -4,15 +4,9 @@ Quick start guide for using the custom agent workflow.
 
 ## Installation
 
-### Option 1: Global Configuration
-Copy `CLAUDE.md` to your home directory for use across all projects:
+Run `./install.sh` from a clone of this repo. See the [README](../README.md#installation) for what it links and merges.
 
-```bash
-cp CLAUDE.md ~/.claude/CLAUDE.md
-```
-
-### Option 2: Per-Project Configuration
-Copy `CLAUDE.md` to your project root:
+For per-project use, copy `CLAUDE.md` into the project root:
 
 ```bash
 cp CLAUDE.md /path/to/your/project/CLAUDE.md
