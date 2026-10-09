@@ -35,6 +35,7 @@ For per-project use instead, copy `CLAUDE.md` into the project root.
 | `agents/` | The five sub-agents described below |
 | `budget/` | Status line + hooks that show Claude its context use and plan limits |
 | `skills/session-handoff/` | Writes resume notes; the budget rules call it |
+| `skills/sidequest-promo/` | App Store screenshots, app previews, promo videos and link cards for Side Quest projects, from code (needs ffmpeg; run its `scripts/setup.sh` once) |
 | `settings.json` | Registers the status line and hooks |
 
 ## Budget awareness

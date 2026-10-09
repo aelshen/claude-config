@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Promo video</title>
+<link rel="stylesheet" href="lib/promo.css">
+<style>
+  /* Layout switches on orientation: .land (16:9, 1:1) puts the phone beside the copy, .port stacks them. */
+  .copy { position: absolute; }
+  .land .copy { left: calc(130 * var(--u)); top: 50%; width: 46%; transform: translateY(-50%); }
+  .port .copy { left: calc(90 * var(--u)); right: calc(90 * var(--u)); top: calc(230 * var(--u)); }
+  .land .phone-wrap { position: absolute; right: calc(190 * var(--u)); top: calc(90 * var(--u)); }
+  .port .phone-wrap { position: absolute; left: 50%; margin-left: calc(-330 * var(--u)); top: calc(700 * var(--u)); }
+  .land .phone { width: calc(420 * var(--u)); }
+  .port .phone { width: calc(660 * var(--u)); }
+  .phone .screen { position: relative; overflow: hidden; }
+  .phone .screen img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top; }
+  .big { font-size: calc(260 * var(--u)); font-weight: 750; line-height: 1; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
+  .chips { display: flex; flex-wrap: wrap; gap: calc(16 * var(--u)); justify-content: center; margin-top: calc(40 * var(--u)); }
+  .end-logo img[data-logo] { height: calc(170 * var(--u)); margin: 0 auto calc(50 * var(--u)); }
+  .sample { position: absolute; top: calc(110 * var(--u)); right: calc(110 * var(--u)); opacity: .6; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <section data-scene="hook" class="s-accent">
+    <div class="pad center stack">
+      <p class="kicker" id="hk"></p>
+      <h1 class="display" id="hh"></h1>
+      <p class="h3" id="hs" style="opacity:.85"></p>
+    </div>
+  </section>
+
+  <section data-scene="product" class="s-bg">
+    <div class="copy stack"><h2 class="h1" id="pc"></h2><p class="body muted" id="ps"></p></div>
+    <div class="phone-wrap" data-bleed>
+      <div class="phone"><div class="screen"><img id="before" alt=""><img id="after" alt=""><div class="tap" id="tap"></div></div></div>
+    </div>
+  </section>
+
+  <section data-scene="proof" class="s-soft">
+    <div class="pad center">
+      <div class="big accent"><span id="pv">0</span><span id="px"></span></div>
+      <p class="h3" id="pl" style="margin-top:calc(30*var(--u))"></p>
+      <div class="chips" id="chips"></div>
+    </div>
+  </section>
+
+  <section data-scene="end" class="s-bg">
+    <div class="pad center">
+      <div class="end-logo"><img data-logo="icon" id="logo"></div>
+      <p class="h2" id="eline"></p>
+      <p class="h3 accent" id="eu" style="margin-top:calc(26*var(--u))"></p>
+    </div>
+  </section>
+</div>
+<script src="data.js"></script>
+<script src="brand/brand.js"></script>
+<script>
+  const D = DATA, B = PROMO_BRAND;
+  document.getElementById("stage").classList.add(D.size.width >= D.size.height ? "land" : "port");
+  if ((B.logos.light || {}).stacked) logo.dataset.logo = "stacked";
+  if (D.SAMPLE) document.querySelectorAll("[data-scene]").forEach(s => s.insertAdjacentHTML("beforeend", '<p class="sample kicker">Sample</p>'));
+</script>
+<script src="lib/promo.js"></script>
+<script>
+  const { fx, prog, lerp, set, ease } = Promo;
+  const dur = D.durations;
+  Promo.video({
+    ...D.size,
+    scenes: [
+      { id: "hook", duration: dur.hook, enter: "cut",
+        setup() { hk.textContent = D.hook.kicker || B.name; hh.textContent = D.hook.headline; hs.textContent = D.hook.sub; },
+        render(t) { fx.rise([hk, hh, hs], t, 0.15, { stagger: 0.18, dist: 50 }); } },
+
+      { id: "product", duration: dur.product, enter: "fade", checks: [3.4],
+        setup(el) {
+          pc.textContent = D.product.caption; ps.textContent = D.product.sub;
+          before.src = D.product.before; after.src = D.product.after;
+          tap.style.left = D.product.tap.x * 100 + "%"; tap.style.top = D.product.tap.y * 100 + "%";
+        },
+        render(t, el, c) {
+          fx.rise([pc, ps], t, 0.2, { stagger: 0.15 });
+          const p = prog(t, 0.1, 1.0, ease.out);
+          set(el.querySelector(".phone-wrap"), { opacity: p, y: (1 - p) * c.H * 0.25 });
+          fx.tap(tap, t, 3.2);
+          fx.fade(after, t, 3.35, { dur: 0.35 });
+        } },
+
+      { id: "proof", duration: dur.proof, enter: "fade",
+        setup() {
+          px.textContent = D.proof.suffix || ""; pl.textContent = D.proof.label;
+          chips.innerHTML = ""; for (const x of D.proof.chips || []) { const s = document.createElement("span"); s.className = "chip"; s.textContent = x; chips.append(s); }
+        },
+        render(t) {
+          fx.count(pv, D.proof.value, t, 0.2, { dur: 1.6 });
+          fx.rise(pl, t, 0.5);
+          fx.pop(chips.children, t, 1.6, { stagger: 0.12 });
+        } },
+
+      { id: "end", duration: dur.end, enter: "fade",
+        setup() { eline.textContent = D.end.line || B.tagline; eu.textContent = D.end.url || B.url; },
+        render(t) { fx.pop(logo, t, 0.15, { speed: 9 }); fx.rise([eline, eu], t, 0.5, { stagger: 0.2 }); } },
+    ],
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,74 @@
+/* promo.css: base styles for Side Quest promo assets. Brand colors arrive as CSS variables from brand/brand.js
+   (set by promo.js on :root); sizes are in stage pixels, so a composition looks the same at any render scale. */
+
+@font-face { font-family: "Inter"; src: url("../fonts/Inter.ttf") format("truetype"); font-weight: 100 900; font-display: block; }
+@font-face { font-family: "Noto Naskh Arabic"; src: url("../fonts/NotoNaskhArabic.ttf") format("truetype"); font-weight: 400 700; font-display: block; }
+
+:root {
+  --font: "Inter", sans-serif;
+  --font-ar: "Noto Naskh Arabic", serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { background: #000; overflow: hidden; }
+body { font-family: var(--font); -webkit-font-smoothing: antialiased; font-feature-settings: "cv11", "ss01"; }
+
+#stage { position: absolute; left: 0; top: 0; overflow: hidden; transform-origin: 0 0; background: var(--bg); color: var(--ink); }
+#stage > section { position: absolute; inset: 0; overflow: hidden; }
+
+/* Surfaces: one per scene or board. */
+.s-bg      { background: var(--bg); color: var(--ink); }
+.s-surface { background: var(--surface); color: var(--ink); }
+.s-accent  { background: var(--accent); color: var(--accentInk); }
+.s-ink     { background: var(--ink); color: var(--bg); }
+.s-soft    { background: var(--accentSoft); color: var(--ink); }
+
+/* Arabic gets its own face, direction and a taller line. */
+:lang(ar), .ar { font-family: var(--font-ar); direction: rtl; unicode-bidi: isolate; line-height: 1.6; }
+
+/* Type scale in stage pixels (1080-wide reference; scale with --u for other sizes). */
+#stage { --u: 1px; }
+.display { font-size: calc(132 * var(--u)); font-weight: 700; line-height: 1.02; letter-spacing: -0.03em; }
+.h1      { font-size: calc(96 * var(--u));  font-weight: 700; line-height: 1.05; letter-spacing: -0.025em; }
+.h2      { font-size: calc(68 * var(--u));  font-weight: 650; line-height: 1.1;  letter-spacing: -0.02em; }
+.h3      { font-size: calc(48 * var(--u));  font-weight: 600; line-height: 1.15; letter-spacing: -0.01em; }
+.body    { font-size: calc(36 * var(--u));  font-weight: 400; line-height: 1.4; }
+.small   { font-size: calc(28 * var(--u));  font-weight: 500; line-height: 1.35; }
+.kicker  { font-size: calc(26 * var(--u));  font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
+.muted   { color: var(--muted); }
+.accent  { color: var(--accent); }
+.s-accent .muted { color: var(--accentInk); opacity: .8; }
+
+/* Layout helpers. */
+.pad   { position: absolute; inset: calc(96 * var(--u)); }
+.stack { display: flex; flex-direction: column; gap: calc(28 * var(--u)); }
+.center { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+.row   { display: flex; align-items: center; gap: calc(24 * var(--u)); }
+
+/* Logos: <img data-logo="wordmark|icon|stacked"> gets the right file for the theme. */
+img[data-logo] { display: block; height: calc(80 * var(--u)); width: auto; }
+
+/* A generic phone (no manufacturer artwork): put a screenshot <img> inside. Width drives everything.
+   Add .island for a camera pill: only when the screenshot has a status bar for it to sit over. */
+.phone { position: relative; width: calc(560 * var(--u)); aspect-ratio: 390 / 844; border-radius: calc(78 * var(--u));
+  background: #0b0b0c; padding: calc(16 * var(--u)); box-shadow: 0 calc(40 * var(--u)) calc(90 * var(--u)) rgba(0,0,0,.22); }
+.phone > img, .phone > .screen { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top;
+  border-radius: calc(62 * var(--u)); background: var(--surface); }
+.phone.island::after { content: ""; position: absolute; top: calc(34 * var(--u)); left: 50%; width: 30%; height: calc(34 * var(--u));
+  transform: translateX(-50%); border-radius: 999px; background: #0b0b0c; }
+
+/* Tap marker for "user taps here" moments (fx.tap animates it). */
+.tap { position: absolute; width: calc(90 * var(--u)); height: calc(90 * var(--u)); margin: calc(-45 * var(--u)) 0 0 calc(-45 * var(--u));
+  border-radius: 50%; background: rgba(255,255,255,.55); border: calc(4 * var(--u)) solid var(--accent); opacity: 0; pointer-events: none; }
+
+.chip { display: inline-flex; align-items: center; gap: calc(12 * var(--u)); padding: calc(14 * var(--u)) calc(26 * var(--u));
+  border-radius: 999px; background: var(--accentSoft); color: var(--ink); font-size: calc(30 * var(--u)); font-weight: 600; }
+.card { background: var(--surface); border: calc(2 * var(--u)) solid var(--line); border-radius: calc(36 * var(--u)); padding: calc(40 * var(--u)); }
+
+/* Preview chrome (not shown when rendering). */
+#promo-bar { position: fixed; left: 0; right: 0; bottom: 0; height: 44px; display: flex; align-items: center; gap: 12px; padding: 0 14px;
+  background: #111; color: #ddd; font: 13px/1 ui-monospace, monospace; z-index: 10; }
+#promo-bar input { flex: 1; }
+#promo-bar button { font: inherit; background: #333; color: #eee; border: 0; border-radius: 6px; padding: 6px 10px; cursor: pointer; }
+.s-soft .chip { background: var(--surface); }
+.s-accent .chip { background: var(--accentInk); color: var(--accent); }

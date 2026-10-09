@@ -16,3 +16,8 @@ npm-debug.log*
 # Personal notes
 notes/
 scratch/
+
+# Skill venvs and renders
+.venv/
+__pycache__/
+skills/*/out/
