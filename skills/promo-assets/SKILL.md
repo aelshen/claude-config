@@ -88,7 +88,12 @@ the skill folder. Add `--brands-dir <folder>` for a brand outside the default pl
 `--update` later refreshes `lib/`, `brand/`, `fonts/` from the skill without touching `index.html`/`data.js`.
 
 ### 3. Real product, real numbers
-Capture the real app instead of mocking it:
+Capture the real app instead of mocking it. For a flow (tap a word, a sheet opens, save it), write a small
+`build_media.py` in the project that drives the app with Playwright in a fresh browser - skip onboarding and tips
+the way a new user would, hide web-only hints the phone app doesn't show - and saves each state plus the
+positions of what gets tapped (`media/layout.json`), so the video's taps land on the real buttons. Then
+animate between states (scroll the text, slide the sheet up, push to the next screen) instead of cross-fading
+stills. Quick single shots:
 ```bash
 $PY <skill-dir>/scripts/capture.py http://localhost:8081/ --out promo/<name>/media/library.png
 $PY <skill-dir>/scripts/capture.py http://localhost:8081/word/x --dark --wait-for "text=Meaning" --out ...
@@ -105,6 +110,9 @@ Edit `data.js` first; edit `index.html` when the layout needs to change. Rules t
 - Arabic text goes in an element with `lang="ar"` (gets Noto Naskh and RTL). `fx.type` is grapheme-safe.
 - Surfaces: `s-bg`, `s-surface`, `s-accent`, `s-soft`, `s-ink`; text is ink/muted/accent on them.
   Phone: `<div class="phone"><img src="media/x.png"></div>` (add `.island` only if the shot has a status bar).
+- Don't give elements ids that are browser globals (`screen`, `history`, `location`, `name`, `top`, `parent`):
+  `id="x"` is reachable as `x` in scripts only when it doesn't shadow one.
+- Don't put CSS `transform` on anything `render()` animates (`set()` replaces it); position with left/top/margin.
 - Opt-outs for intentional cases: `data-bleed` (may leave the safe area), `data-overlap-ok`, `data-viz`
   (any colors, for charts), `data-lint-ignore`.
 

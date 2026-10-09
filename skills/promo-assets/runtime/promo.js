@@ -161,7 +161,7 @@
       if (ox > 4 && oy > 4) add("warn", "overlap", a.el, `"${a.text.slice(0, 25)}" overlaps "${b.text.slice(0, 25)}"`);
     }
     const imgs = [...stage.querySelectorAll("img, .phone, [data-obstacle]")].filter(i => visible(i) && !i.closest("[data-overlap-ok]")).map(i => {
-      const r = i.getBoundingClientRect(); return { el: i, box: { l: (r.left - sr.left) / k, t: (r.top - sr.top) / k, r: (r.right - sr.left) / k, b: (r.bottom - sr.top) / k } }; });
+      const r = visibleRect(i); return { el: i, box: { l: (r.left - sr.left) / k, t: (r.top - sr.top) / k, r: (r.right - sr.left) / k, b: (r.bottom - sr.top) / k } }; });
     for (const a of texts) for (const im of imgs) {
       if (a.el.closest("[data-overlap-ok]") || im.el.contains(a.el) || im.el.parentElement.contains(a.el)) continue;
       const ox = Math.min(a.box.r, im.box.r) - Math.max(a.box.l, im.box.l), oy = Math.min(a.box.b, im.box.b) - Math.max(a.box.t, im.box.t);
@@ -169,6 +169,16 @@
     }
     for (const f of document.fonts) if (f.status === "error") add("error", "font", null, `font failed to load: ${f.family}`);
     return out;
+  }
+  /** The element's box cut down to what its overflow-clipping ancestors actually show. */
+  function visibleRect(el) {
+    const r = el.getBoundingClientRect(); let { left, top, right, bottom } = r;
+    for (let e = el.parentElement; e && e.id !== "stage"; e = e.parentElement) {
+      if (!/hidden|clip/.test(getComputedStyle(e).overflow)) continue;
+      const c = e.getBoundingClientRect();
+      left = Math.max(left, c.left); top = Math.max(top, c.top); right = Math.min(right, c.right); bottom = Math.min(bottom, c.bottom);
+    }
+    return { left, top, right: Math.max(left, right), bottom: Math.max(top, bottom) };
   }
   /** The box around the element's own text (not its full width), in viewport px. */
   function textRect(el) {

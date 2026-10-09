@@ -48,8 +48,13 @@ def composition(html: Path, scale: float = 1.0):
 
 
 def wait_ready(page) -> dict:
-    page.wait_for_function("window.__promo !== undefined", timeout=15000)
-    page.evaluate("() => window.__promo.ready")
+    from playwright.sync_api import Error
+    try:
+        page.wait_for_function("window.__promo !== undefined", timeout=15000)
+        page.evaluate("() => window.__promo.ready")
+    except Error as e:
+        msg = str(e).split("\n")
+        sys.exit("the composition failed to start: " + " | ".join(l.strip() for l in msg[:3]))
     return page.evaluate("""() => { const p = window.__promo;
         return { kind: p.kind, width: p.width, height: p.height, fps: p.fps, duration: p.duration,
                  scenes: p.scenes, boards: p.boards }; }""")
