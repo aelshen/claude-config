@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Start a promo project for one Side Quest brand.
+"""Start a promo project for one brand.
 
   new.py <dir> --brand arabayya --preset app-store-6.9      App Store screenshots (boards)
   new.py <dir> --brand arabayya --preset app-preview        App Store app preview video, 886x1920
@@ -13,6 +13,7 @@ Re-run with --update to refresh lib/, brand/ and fonts/ from the skill without t
 """
 import argparse
 import json
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -32,12 +33,27 @@ PRESETS = {
 }
 
 
-def brands() -> list[str]:
-    return sorted(p.name for p in (SKILL / "brands").iterdir() if (p / "brand.js").exists())
+def brand_dirs(extra: str | None = None) -> list[Path]:
+    """Where brands are looked up, first match wins: --brands-dir, $PROMO_BRANDS (colon-separated),
+    ~/.config/promo-assets/brands, then the brands that ship with the skill. Keep private brands (licensed fonts,
+    client logos) in one of the first three, outside this skill's repo."""
+    dirs = [extra] if extra else []
+    dirs += [d for d in os.environ.get("PROMO_BRANDS", "").split(":") if d]
+    dirs += [str(Path.home() / ".config" / "promo-assets" / "brands"), str(SKILL / "brands")]
+    return [Path(d).expanduser().resolve() for d in dirs if Path(d).expanduser().is_dir()]
 
 
-def refresh(dest: Path, brand: str) -> None:
-    for name, src in (("lib", SKILL / "runtime"), ("fonts", SKILL / "fonts"), ("brand", SKILL / "brands" / brand)):
+def brands(extra: str | None = None) -> dict[str, Path]:
+    found: dict[str, Path] = {}
+    for d in brand_dirs(extra):
+        for p in sorted(d.iterdir()):
+            if (p / "brand.js").exists() and p.name not in found:
+                found[p.name] = p
+    return found
+
+
+def refresh(dest: Path, brand_path: Path) -> None:
+    for name, src in (("lib", SKILL / "runtime"), ("fonts", SKILL / "fonts"), ("brand", brand_path)):
         if (dest / name).exists():
             shutil.rmtree(dest / name)
         shutil.copytree(src, dest / name)
@@ -49,11 +65,14 @@ def main() -> None:
     ap.add_argument("--brand")
     ap.add_argument("--preset", default="video", choices=PRESETS)
     ap.add_argument("--theme", default="light", choices=["light", "dark"])
+    ap.add_argument("--brands-dir", help="extra folder of brands (also: $PROMO_BRANDS, ~/.config/promo-assets/brands)")
     ap.add_argument("--update", action="store_true")
     ap.add_argument("--list", action="store_true")
     a = ap.parse_args()
     if a.list or not a.dir:
-        print("brands: ", ", ".join(brands()))
+        print("brands:")
+        for k, p in brands(a.brands_dir).items():
+            print(f"  {k:14} {p}")
         print("presets:")
         for k, (tpl, w, h, _) in PRESETS.items():
             print(f"  {k:14} {tpl:9} {w}x{h}")
@@ -64,24 +83,32 @@ def main() -> None:
         if not meta_path.exists():
             sys.exit(f"{dest} isn't a promo project (no promo.json)")
         meta = json.loads(meta_path.read_text())
-        refresh(dest, a.brand or meta["brand"])
+        name = a.brand or meta["brand"]
+        found = brands(a.brands_dir or meta.get("brands_dir"))
+        if name not in found:
+            sys.exit(f"brand {name!r} not found in {[str(d) for d in brand_dirs(a.brands_dir)]}")
+        refresh(dest, found[name])
         print(f"refreshed lib/, brand/, fonts/ in {dest}")
         return
-    if not a.brand or a.brand not in brands():
-        sys.exit(f"--brand is one of: {', '.join(brands())} (add one under {SKILL / 'brands'})")
+    found = brands(a.brands_dir)
+    if not a.brand or a.brand not in found:
+        sys.exit(f"--brand is one of: {', '.join(found)} (searched {', '.join(str(d) for d in brand_dirs(a.brands_dir))})")
     if (dest / "index.html").exists():
         sys.exit(f"{dest} already has an index.html")
     tpl, w, h, extra = PRESETS[a.preset]
     dest.mkdir(parents=True, exist_ok=True)
     for f in (SKILL / "templates" / tpl).iterdir():
         (shutil.copytree if f.is_dir() else shutil.copy)(f, dest / f.name)
-    refresh(dest, a.brand)
+    refresh(dest, found[a.brand])
     (dest / "media").mkdir(exist_ok=True)
     data = (dest / "data.js").read_text()
     size = {"width": w, "height": h, "theme": a.theme, **extra}
     data = data.replace("/*SIZE*/", json.dumps(size))
     (dest / "data.js").write_text(data)
-    meta_path.write_text(json.dumps({"brand": a.brand, "preset": a.preset, **size}, indent=1) + "\n")
+    meta_path.write_text(json.dumps({"brand": a.brand, "brands_dir": str(found[a.brand].parent), "preset": a.preset, **size}, indent=1) + "\n")
+    if (found[a.brand] / "PRIVATE").exists():
+        (dest / ".gitignore").write_text("out/\nbrand/\nfonts/\nlib/\n")
+        print(f"  note: brand {a.brand!r} is private (licensed fonts or logos): brand/ is gitignored here; don't publish this folder")
     print(f"new {tpl} project for {a.brand} at {dest} ({w}x{h}, {a.theme})")
     print(f"  edit data.js and index.html; preview: open {dest / 'index.html'}")
     print(f"  look:   {SKILL}/.venv/bin/python {SKILL}/scripts/stills.py {dest}")

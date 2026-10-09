@@ -23,7 +23,7 @@
 <script src="data.js"></script>
 <script src="brand/brand.js"></script>
 <script>
-  headline.textContent = DATA.headline; sub.textContent = DATA.sub; shot.src = DATA.shot;
+  headline.textContent = DATA.headline; sub.textContent = DATA.sub || PROMO_BRAND.url; shot.src = DATA.shot;
   if (PROMO_BRAND.logos.light.wordmark) document.querySelector("[data-logo]").dataset.logo = "wordmark";
 </script>
 <script src="lib/promo.js"></script>

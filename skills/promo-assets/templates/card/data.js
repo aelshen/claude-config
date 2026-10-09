@@ -2,6 +2,6 @@
 window.DATA = {
   size: /*SIZE*/,
   headline: "Your headline here",
-  sub: "sidequest.nexus",
+  sub: "",                     // empty: the brand's url
   shot: "media/shot-1.png",
 };

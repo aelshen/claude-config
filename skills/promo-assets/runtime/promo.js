@@ -93,7 +93,21 @@
   };
 
   // ---------- brand ----------
+  // Fonts: a brand may bring its own (brand.fonts = { sans: {family, files: [{src, weight, style}]}, arabic: {...} },
+  // paths relative to the brand folder). Without them: Inter and Noto Naskh Arabic from fonts/.
+  const FONT = { sans: (B.fonts && B.fonts.sans && B.fonts.sans.family) || "Inter",
+                 arabic: (B.fonts && B.fonts.arabic && B.fonts.arabic.family) || "Noto Naskh Arabic" };
+  function brandFonts() {
+    const css = [];
+    for (const f of Object.values(B.fonts || {})) for (const file of f.files || [])
+      css.push(`@font-face { font-family: "${f.family}"; src: url("brand/${file.src}"); font-weight: ${file.weight || 400}; font-style: ${file.style || "normal"}; font-display: block; }`);
+    if (css.length) { const st = document.createElement("style"); st.textContent = css.join("\n"); document.head.append(st); }
+    const r = document.documentElement.style;
+    r.setProperty("--font", `"${FONT.sans}", sans-serif`);
+    r.setProperty("--font-ar", `"${FONT.arabic}", serif`);
+  }
   function applyBrand(theme, width) {
+    brandFonts();
     const c = B.themes[theme] || B.themes.light;
     const r = document.documentElement.style;
     for (const [k, v] of Object.entries(c)) r.setProperty("--" + k, v);
@@ -106,7 +120,7 @@
   }
 
   async function fontsReady() {
-    await Promise.all(["400 40px Inter", "700 40px Inter", "400 40px 'Noto Naskh Arabic'"].map(f => document.fonts.load(f, "aب")));
+    await Promise.all([`400 40px "${FONT.sans}"`, `700 40px "${FONT.sans}"`, `400 40px "${FONT.arabic}"`].map(f => document.fonts.load(f, "aب")));
     await document.fonts.ready;
     await Promise.all([...document.images].map(i => (i.complete ? null : new Promise(r => { i.onload = i.onerror = r; }))));
   }
@@ -135,8 +149,8 @@
         add("error", "clipped", el, `${label} is cut off`);
       const minPx = Math.min(W, H) * 0.022;
       if (parseFloat(cs.fontSize) < minPx) add("warn", "tiny", el, `${label} is ${parseFloat(cs.fontSize).toFixed(0)}px; under ${minPx.toFixed(0)}px is hard to read on a phone`);
-      if (/[؀-ۿ]/.test(own) && !/Naskh/i.test(cs.fontFamily)) add("error", "arabic", el, `${label} has Arabic but not the Arabic face: put it in lang="ar"`);
-      if (!/Inter|Naskh/i.test(cs.fontFamily.split(",")[0])) add("warn", "font", el, `${label} uses ${cs.fontFamily.split(",")[0]}`);
+      if (/[؀-ۿ]/.test(own) && !cs.fontFamily.includes(FONT.arabic)) add("error", "arabic", el, `${label} has Arabic but not the Arabic face: put it in lang="ar"`);
+      if (![FONT.sans, FONT.arabic].includes(cs.fontFamily.split(",")[0].trim().replace(/^["']|["']$/g, ""))) add("warn", "font", el, `${label} uses ${cs.fontFamily.split(",")[0]}`);
       const col = rgb(cs.color);
       if (col && !el.closest("[data-viz]") && Math.min(...palette.map(p => dist(p, col))) > 12) add("warn", "color", el, `${label} color ${cs.color} isn't a brand color`);
     }

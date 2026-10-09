@@ -1,10 +1,10 @@
 ---
-name: sidequest-promo
-description: Make promotional assets for Side Quest Nexus projects (arabayya, PlayPatch, the company site) from code - App Store screenshots, App Store app preview videos, short demo/launch videos (16:9, 9:16, 1:1), and link-preview cards - in each project's own brand, with real product captures. Each asset is one HTML page drawn deterministically and rendered with headless Chromium and ffmpeg, then checked through stills, contact sheets and a lint. Use when asked for screenshots for the App Store, an app preview, a promo/demo/teaser video, a social clip, an OG image or link card, "marketing images", or to update any of these, for any Side Quest project.
-compatibility: Needs ffmpeg (brew install ffmpeg) and the skill's own venv (scripts/setup.sh installs Playwright + Chromium + Pillow into <skill-dir>/.venv).
+name: promo-assets
+description: Make promotional assets from code for any product or organization - App Store screenshots, App Store app preview videos, short demo/launch videos (16:9, 9:16, 1:1), and link-preview cards (Open Graph) - in that organization's brand (colors, logos, fonts), using real product captures. Each asset is one HTML page drawn deterministically, rendered with headless Chromium and ffmpeg, and checked through stills, contact sheets and a lint. Ships with Side Quest Nexus, arabayya and PlayPatch brands; other brands (including private ones with licensed fonts) load from outside the skill. Use when asked for App Store screenshots, an app preview, a promo/demo/teaser/launch video, a social clip, an OG image or link card, "marketing images", or to update any of these.
+compatibility: macOS or Linux with Python 3.10+ and ffmpeg. One-time setup (scripts/setup.sh) builds a venv in the skill folder with Playwright, its Chromium, and Pillow. Rendering needs no network.
 ---
 
-# Side Quest promo assets
+# Promo assets from code
 
 Every asset is a web page. A **video** is one `index.html` whose `seek(t)` draws moment `t`; `render.py`
 screenshots each frame and pipes them into ffmpeg. A **boards** project is one page with several fixed
@@ -14,21 +14,61 @@ frame depends only on `t`, renders are identical every time and any edit is just
 You can't watch video, so check it the way an editor scrubs a timeline: **stills at chosen moments and
 contact sheets**, then look at every PNG.
 
-`<skill-dir>` is the folder holding this file; run scripts with `<skill-dir>/.venv/bin/python`
-(first time: `bash <skill-dir>/scripts/setup.sh`). Let `PY=<skill-dir>/.venv/bin/python`.
+`<skill-dir>` is the folder holding this file (`~/.claude/skills/promo-assets`). Run every script with the
+skill's own Python: `PY=<skill-dir>/.venv/bin/python`.
+
+## Setup (once per machine)
+
+Check first: `test -x <skill-dir>/.venv/bin/python && command -v ffmpeg` - if both pass, skip to Brands.
+
+1. **ffmpeg** (encodes the videos and reads frames back for contact sheets):
+   macOS `brew install ffmpeg`; Debian/Ubuntu `sudo apt install ffmpeg`. Needs `libx264` (both of those include it).
+   Ask before installing system packages.
+2. **The skill's venv**: `bash <skill-dir>/scripts/setup.sh`. It:
+   - creates `<skill-dir>/.venv` with `python3 -m venv` (needs Python 3.10+; `python3 --version`);
+   - installs `requirements.txt` (Playwright, Pillow) into it;
+   - downloads Playwright's Chromium (~150 MB, into `~/Library/Caches/ms-playwright` on macOS,
+     `~/.cache/ms-playwright` on Linux; shared by every Playwright install on the machine).
+   Re-running is safe. On Linux, if Chromium fails to start: `<skill-dir>/.venv/bin/python -m playwright install-deps chromium`.
+3. **Check it works**: `$PY <skill-dir>/scripts/new.py --list` lists brands and presets; a first
+   `stills.py` run on a new project should end with `lint: no errors`.
+
+What's not needed: Node, Xcode, a GPU, a network connection while rendering, or any font install (fonts
+are in `<skill-dir>/fonts/` and inside each brand).
+
+**Moving or renaming the skill folder breaks the venv** (venvs hold absolute paths): delete `.venv` and run
+`setup.sh` again. The venv, `__pycache__` and every project's `out/` are gitignored.
+
+Troubleshooting:
+| Symptom | Fix |
+|---|---|
+| `ModuleNotFoundError: playwright` | You used the system `python3`; use `$PY`, or run `setup.sh` |
+| `Executable doesn't exist ... chromium` | `$PY -m playwright install chromium` |
+| `ffmpeg not found` | Install it (step 1) |
+| lint `font failed to load` / text looks like Times | A font path in `brand.js` is wrong, or a brand font file is missing |
+| `page error: ...` | A JavaScript error in the project's `index.html`/`data.js`; open `index.html` in a browser and check the console |
+| Render differs from the browser preview | Something isn't driven by `t` (a CSS transition, a timer); see Build rules |
 
 | Read | When |
 |---|---|
 | `references/sizes.md` | Before making store assets: App Store screenshot and preview specs, link-card sizes |
 | `references/craft.md` | Planning a story, timing, motion, copy, and the QA checklist |
+| `references/brands.md` | Adding a brand, private brands (licensed fonts), where brands are looked up |
 | `runtime/promo.js` header | The scene/board API and the `fx` motion helpers (rise, fade, pop, wipe, type, count, tap) |
 
 ## Brands
 
-`brands/<id>/brand.js` per project: light/dark colors (copied from `sidequest.nexus/styles.css`), logos,
-name, tagline, url. Present: `arabayya`, `playpatch`, `sidequest`. **Add a project** by copying a folder,
-taking its colors from the website's `.t-<project>` block and its logos from `public/<project>/assets/`.
-Fonts are Inter and Noto Naskh Arabic (both OFL, in `fonts/`), so projects can be shared and published.
+A brand is a folder with `brand.js` (light/dark colors, logos, name, tagline, url, optional fonts) - format in
+`references/brands.md`. `new.py --list` shows what's available. Shipped (public): `sidequest`, `arabayya`,
+`playpatch`, with colors from `sidequest.nexus/styles.css`.
+
+Other organizations' brands live **outside this skill**: `~/.config/promo-assets/brands/<id>/`, or any folder
+on `$PROMO_BRANDS`, or `--brands-dir`. **This skill is in a public repo: never add a brand with licensed fonts,
+non-public logos or client material to `<skill-dir>/brands/`.** Mark such a brand with an empty `PRIVATE` file
+so its projects gitignore the brand files. Don't have the brand? Ask for its logo files, colors and font (or its
+website, and take the CSS variables and assets from there).
+
+Default fonts are Inter and Noto Naskh Arabic (OFL, `fonts/`); a brand can bring its own.
 
 ## Workflow
 
@@ -43,7 +83,8 @@ headline, visual, data source - and show it. Default arc: hook (3-4 s) → 1-3 p
 $PY <skill-dir>/scripts/new.py --list
 $PY <skill-dir>/scripts/new.py promo/<name> --brand arabayya --preset app-store-6.9   # or app-preview, video, vertical, square, card
 ```
-Put it where the project keeps things (e.g. `<repo>/promo/<name>/`; add `out/` to `.gitignore`).
+Put it where the project keeps things (e.g. `<repo>/promo/<name>/`; add `out/` to `.gitignore`), never inside
+the skill folder. Add `--brands-dir <folder>` for a brand outside the default places.
 `--update` later refreshes `lib/`, `brand/`, `fonts/` from the skill without touching `index.html`/`data.js`.
 
 ### 3. Real product, real numbers
@@ -99,3 +140,4 @@ owner's approval before anything is uploaded to the App Store or posted.
   native speaker before it ships).
 - **One idea per frame.** A phone screenshot has room for a headline and one line.
 - Never upload, post or submit anything yourself; hand the files to the owner.
+- Follow the organization's own approval rules for anything external (brand review, legal, who signs off).
