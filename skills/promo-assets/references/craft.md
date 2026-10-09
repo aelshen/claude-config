@@ -11,6 +11,9 @@
 - A tap: show the marker ~0.25 s before the press, change the screen ~0.15 s after it (`fx.tap` + `fx.fade`).
 - Count-ups: 1.2-1.8 s. Longer feels slow, shorter can't be read.
 - App previews: put the strongest moment in the first 3 s; autoplay is muted and people scroll.
+- Pace for a first-time viewer, not for someone who knows the app: hold each new state 2.5-4 s after it
+  appears, slide sheets over ~0.9 s, push screens over ~0.8 s. A 4-beat app preview fits in ~28 s.
+  (Owner feedback, 2026-10-09: a 21 s cut with 0.6 s slides and 2 s holds "moves too fast".)
 
 ## Motion
 - Entrances: `fx.rise` 0.6-0.8 s, `ease.out`, staggered 0.1-0.2 s. Exits short (0.3 s) or a cut.
