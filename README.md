@@ -35,6 +35,7 @@ For per-project use instead, copy `CLAUDE.md` into the project root.
 | `agents/` | The five sub-agents described below |
 | `budget/` | Status line + hooks that show Claude its context use and plan limits |
 | `skills/session-handoff/` | Writes resume notes; the budget rules call it |
+| `skills/promo-assets/` | App Store screenshots, app previews, promo videos and link cards from code, in any brand. Ships Side Quest brands; private brands (licensed fonts, client logos) load from outside the repo. Setup: ffmpeg + its `scripts/setup.sh` |
 | `settings.json` | Registers the status line and hooks |
 
 ## Budget awareness
