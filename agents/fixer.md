@@ -1,6 +1,6 @@
 ---
 name: fixer
-description: Cheap, fast executor for small, fully specified edits (Haiku). Use when the change is already decided and written down: the files, what to change, and how to verify it (rename across files, fix a known bug at a known line, update a config value, apply review findings, add a test case to an existing pattern). Not for designing a solution, debugging an unknown cause, or anything that needs judgement about scope.
+description: Cheap executor for mechanical edits that are already fully specified (Haiku). Use for volume, not for one-liners - a rename or API swap across many files, applying a list of review findings, repeating one known pattern N times - when doing it inline would fill the main context. The brief must name the files, the exact change, and a check command. Not for designing a solution, debugging an unknown cause, or anything that needs judgement about scope; a single small edit is cheaper done inline.
 tools: Read, Edit, Write, Grep, Glob, Bash
 model: haiku
 effort: medium

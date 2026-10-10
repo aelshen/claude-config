@@ -51,12 +51,12 @@ How it's wired, all through documented Claude Code settings:
 
 - `settings.json` sets `"model": "opus"` for the main session and `CLAUDE_CODE_SUBAGENT_MODEL=sonnet`, the model for any subagent that doesn't name its own.
 - Each file in `agents/` sets `model:` (and `effort:`) in its frontmatter, which beats the env default.
-- `agents/Explore.md` overrides the built-in `Explore` agent. The built-in one runs on the main session's model (Opus); this one runs on Haiku at low effort.
+- `agents/Explore.md` overrides the built-in `Explore` agent. The built-in one runs on the main session's model (Opus); this one runs on Haiku at medium effort and skips CLAUDE.md, like the built-in.
 - `CLAUDE.md` § Model Tiering tells the main session when to route to which agent, how to brief a lower tier, and when to escalate.
 
 Precedence, highest first: a `model` passed on the Agent call → agent frontmatter → `CLAUDE_CODE_SUBAGENT_MODEL` → main session model. Aliases (`opus`, `sonnet`, `haiku`) track the latest release; to pin one, set `ANTHROPIC_DEFAULT_HAIKU_MODEL` (or `_SONNET_`/`_OPUS_`) in `env`.
 
-To check it's live, run `/agents` in Claude Code: `Explore` should show as a user agent with model haiku.
+To see where tokens actually go, run `budget/tier-report.sh [days]`: tokens and list-price cost per agent type and model, from your transcripts. Why the tiers are set this way, with sources: [docs/model-tiering.md](docs/model-tiering.md).
 
 ## Budget awareness
 

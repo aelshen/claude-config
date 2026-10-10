@@ -12,28 +12,43 @@ Custom agent workflow configuration for intelligent development assistance.
 
 The main session runs on Opus. Spend Opus tokens on thinking, and send volume work down a tier.
 
+**First decide whether to delegate at all.** Anthropic's measurements: for work that fits in one context, the same model doing it inline (at lower effort if routine) is cheaper than a multi-model split, and every subagent pays a fixed startup cost (~3k tokens for `Explore`, ~30k for `general-purpose`) plus your brief and its report. Delegate only when it buys something:
+- **Context protection:** the reading would flood this session (sweeps, logs, long docs). Most of this session's cost is re-reading its own context every turn, so keeping it small saves more than any model swap.
+- **Parallelism:** independent slices that can run at once.
+- **Volume:** the same mechanical step many times.
+
+Otherwise do it inline: a known file, a one-line fix, or a tightly coupled sequential change stays here. Coupled coding work loses information at every handoff.
+
 | Tier | Who | Use for | Agents |
 |------|-----|---------|--------|
 | **Opus** | Main session, `Plan` | Planning, specs, architecture, trade-offs, decomposing work, writing briefs, reviewing what came back, final answers to the user | (you), `Plan`, `ultrathink-debugger` |
 | **Sonnet** | Subagents (the default) | One scoped outcome end to end: a feature slice, a reproduced bug, a migration step, a review or verification pass | `implementer`, `general-purpose`, `oathkeeper`, `code-quality-pragmatist`, `project-manager`, `workflow-orchestrator` |
-| **Haiku** | Subagents | Volume and speed: search, retrieval, reading logs/docs, listing call sites; small edits that are already fully specified | `Explore`, `fixer` |
+| **Haiku** | Subagents | Volume and speed: search, retrieval, reading logs/docs, listing call sites; mechanical edits at volume that are already fully specified | `Explore`, `fixer` |
 
 How it's wired: each agent's frontmatter sets its `model`/`effort`; `Explore` here overrides the built-in one (which would otherwise run on Opus); `CLAUDE_CODE_SUBAGENT_MODEL=sonnet` in settings makes Sonnet the default for any agent without its own model (e.g. `general-purpose`). A `model` passed on the Agent call beats all of these.
 
 **Routing rules:**
-- **Search across more than ~3 files, or any "where is / list all / what does X say" question** → `Explore` (Haiku). Fan out several in parallel for independent questions. Do it yourself only when you already know the file.
-- **A change that's already decided** (you can name the files, the edit, and the check) → `fixer` (Haiku). If you'd have to explain *why* or *how to approach it*, it isn't a fixer task.
-- **A task with a goal but open details** → `implementer` (Sonnet), with goal, constraints, owned files, and an acceptance check. Parallel implementers must own disjoint files.
+- **A search across more than about 3 files, or any "where is / list all / what does X say" question** → `Explore` (Haiku). Fan out several in parallel for independent questions. Ask it to *locate and quote*, not to analyze or decide. Do it yourself only when you already know the file.
+- **A mechanical change at volume that's already decided** (you can name the files, the edit, and the check) → `fixer` (Haiku). Examples: a rename across 30 files, or a list of review findings. If you'd have to explain *why* or *how to approach it*, it isn't a fixer task. A single small edit is cheaper inline.
+- **A task with a goal but open details** → `implementer` (Sonnet). Give it the goal, constraints, the files it owns, and an acceptance check. Prefer it over `general-purpose`: its narrow tool list starts cheaper. Parallel implementers must own disjoint files.
 - **Keep on Opus:** the plan, cross-cutting design, ambiguous requirements, security- or data-sensitive decisions, and reviewing subagent output before it reaches the user.
 - **Don't pass `model` on Agent calls** to the agents above; their frontmatter already picks the tier. Pass it only to deliberately override (e.g. `model: "haiku"` on a one-off `general-purpose` retrieval job).
 - **Forks run on Opus** (they inherit the main session). Use a fork when the task needs this conversation's context; otherwise prefer a typed agent on a cheaper tier.
-- **Workflow scripts:** `agent()` takes `model`, `effort` and `agentType`. Use `agentType: 'Explore'` (or `model: 'haiku', effort: 'low'`) for find/scan stages, Sonnet for per-item work, and keep judge/verify/synthesis stages on the default Opus.
+- **Workflow scripts:** `agent()` takes `model`, `effort` and `agentType`. Use `agentType: 'Explore'` (or `model: 'haiku', effort: 'medium'`) for find/scan stages, Sonnet for per-item work, and keep judge/verify/synthesis stages on the default Opus.
 
 **Briefs:** lower tiers start with no context. Write a self-contained brief: the goal, exact paths, what "done" looks like, and what not to touch. A Haiku agent given a vague brief costs more in redo than it saves.
 
-**Escalate, don't retry down-tier:** if a Haiku agent returns STOPPED/uncertain or a Sonnet agent returns BLOCKED, take it up a tier (or do it yourself). Don't re-send the same brief to the same tier.
+**Escalate, don't retry on the same tier.** Don't re-send the same brief to the same tier:
+- `fixer` STOPPED or failed its check → `implementer`.
+- `implementer` BLOCKED, or the same task failed twice → do it yourself.
+- `Explore` "not found" on something that should exist → search yourself before concluding it doesn't.
 
-**Trust but verify:** treat Haiku output as leads, not conclusions. Spot-check claims that drive a decision; read the diff of any `fixer` change before reporting it as done.
+**Trust but verify:**
+- **Haiku output is leads, not conclusions.** Open the cited files yourself before a claim drives a decision. Never pass a subagent's analysis to the user unread.
+- **Read the diff** of any `fixer` or `implementer` change before reporting it done.
+- **Verification comes from running things** (tests, typecheck, the app), not from a second model's opinion.
+
+**Measure:** run `~/.claude/budget/tier-report.sh [days]` to see cost per agent type and model. Re-check after changing this section.
 
 ## Intelligent Agent Workflow
 
