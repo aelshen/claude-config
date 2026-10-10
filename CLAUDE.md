@@ -8,6 +8,33 @@ Custom agent workflow configuration for intelligent development assistance.
 - **NEVER set Claude/Anthropic as the commit author or committer** (no `--author` flag, no Claude identity in `user.name`/`user.email`). Commits are authored by the human user only.
 - This applies to all repositories and all work done with Claude Code, permanently.
 
+## Model Tiering (Opus plans, Sonnet builds, Haiku fetches)
+
+The main session runs on Opus. Spend Opus tokens on thinking, and send volume work down a tier.
+
+| Tier | Who | Use for | Agents |
+|------|-----|---------|--------|
+| **Opus** | Main session, `Plan` | Planning, specs, architecture, trade-offs, decomposing work, writing briefs, reviewing what came back, final answers to the user | (you), `Plan`, `ultrathink-debugger` |
+| **Sonnet** | Subagents (the default) | One scoped outcome end to end: a feature slice, a reproduced bug, a migration step, a review or verification pass | `implementer`, `general-purpose`, `oathkeeper`, `code-quality-pragmatist`, `project-manager`, `workflow-orchestrator` |
+| **Haiku** | Subagents | Volume and speed: search, retrieval, reading logs/docs, listing call sites; small edits that are already fully specified | `Explore`, `fixer` |
+
+How it's wired: each agent's frontmatter sets its `model`/`effort`; `Explore` here overrides the built-in one (which would otherwise run on Opus); `CLAUDE_CODE_SUBAGENT_MODEL=sonnet` in settings makes Sonnet the default for any agent without its own model (e.g. `general-purpose`). A `model` passed on the Agent call beats all of these.
+
+**Routing rules:**
+- **Search across more than ~3 files, or any "where is / list all / what does X say" question** → `Explore` (Haiku). Fan out several in parallel for independent questions. Do it yourself only when you already know the file.
+- **A change that's already decided** (you can name the files, the edit, and the check) → `fixer` (Haiku). If you'd have to explain *why* or *how to approach it*, it isn't a fixer task.
+- **A task with a goal but open details** → `implementer` (Sonnet), with goal, constraints, owned files, and an acceptance check. Parallel implementers must own disjoint files.
+- **Keep on Opus:** the plan, cross-cutting design, ambiguous requirements, security- or data-sensitive decisions, and reviewing subagent output before it reaches the user.
+- **Don't pass `model` on Agent calls** to the agents above; their frontmatter already picks the tier. Pass it only to deliberately override (e.g. `model: "haiku"` on a one-off `general-purpose` retrieval job).
+- **Forks run on Opus** (they inherit the main session). Use a fork when the task needs this conversation's context; otherwise prefer a typed agent on a cheaper tier.
+- **Workflow scripts:** `agent()` takes `model`, `effort` and `agentType`. Use `agentType: 'Explore'` (or `model: 'haiku', effort: 'low'`) for find/scan stages, Sonnet for per-item work, and keep judge/verify/synthesis stages on the default Opus.
+
+**Briefs:** lower tiers start with no context. Write a self-contained brief: the goal, exact paths, what "done" looks like, and what not to touch. A Haiku agent given a vague brief costs more in redo than it saves.
+
+**Escalate, don't retry down-tier:** if a Haiku agent returns STOPPED/uncertain or a Sonnet agent returns BLOCKED, take it up a tier (or do it yourself). Don't re-send the same brief to the same tier.
+
+**Trust but verify:** treat Haiku output as leads, not conclusions. Spot-check claims that drive a decision; read the diff of any `fixer` change before reporting it as done.
+
 ## Intelligent Agent Workflow
 
 You have access to custom sub-agents that provide specialized capabilities. Use them intelligently based on the development lifecycle stage.
@@ -96,8 +123,18 @@ Before creating pull requests, would run:
 | Pre-deployment check | Orchestrator: Comprehensive | 8-12 min | 8-10 |
 | Debugging complex issue | Direct: ultrathink-debugger | 3-5 min | 1 |
 | Quick status check | Direct: project-manager | 1 min | 1 |
+| Find/gather across the codebase | Direct: Explore (parallel per question) | <1 min | 1-4 |
+| Apply a decided, small change | Direct: fixer, then read the diff | 1 min | 1 |
+| Build a scoped task from a plan | Direct: implementer per task (disjoint files) | 3-10 min | 1-3 |
 
 ### Available Custom Agents
+
+Model per agent is in its frontmatter; see Model Tiering above.
+
+**Search & Execution:**
+- **Explore** (haiku) - Read-only search and retrieval with `path:line` evidence; overrides the built-in
+- **fixer** (haiku) - Small, fully specified edits, verified
+- **implementer** (sonnet) - One scoped task delivered end to end
 
 **Quality & Validation:**
 - **workflow-orchestrator** - Master coordinator for comprehensive QA
@@ -108,7 +145,7 @@ Before creating pull requests, would run:
 - **project-manager** - Track progress, update checklists, verify compliance
 
 **Debugging & Analysis:**
-- **ultrathink-debugger** - Deep debugging for complex issues
+- **ultrathink-debugger** (opus) - Deep debugging for complex issues
 
 ### Best Practices
 
