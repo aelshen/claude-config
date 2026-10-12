@@ -1,4 +1,8 @@
 {
+  "model": "opus",
+  "env": {
+    "CLAUDE_CODE_SUBAGENT_MODEL": "sonnet"
+  },
   "statusLine": {
     "type": "command",
     "command": "$HOME/.claude/budget/statusline.sh",
@@ -6,13 +10,36 @@
   },
   "hooks": {
     "UserPromptSubmit": [
-      { "hooks": [{ "type": "command", "command": "$HOME/.claude/budget/inject.sh" }] }
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/budget/inject.sh"
+          }
+        ]
+      }
     ],
     "PreToolUse": [
-      { "matcher": "Agent|Workflow", "hooks": [{ "type": "command", "command": "$HOME/.claude/budget/agent-brake.sh" }] }
+      {
+        "matcher": "Agent|Workflow",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/budget/agent-brake.sh"
+          }
+        ]
+      }
     ],
     "SessionStart": [
-      { "matcher": "compact|clear", "hooks": [{ "type": "command", "command": "$HOME/.claude/budget/after-compact.sh" }] }
+      {
+        "matcher": "compact|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/budget/after-compact.sh"
+          }
+        ]
+      }
     ]
   }
 }
