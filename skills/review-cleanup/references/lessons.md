@@ -1,0 +1,30 @@
+# Lessons from real runs
+
+Things that went wrong or right in practice. Add to this when a run teaches something.
+
+## 2026-10-12: whole-repo review of a 35k-line Expo + FastAPI app
+
+- **Five finders, one per slice, in parallel worked well.** Slices: server request path, server
+  tooling scripts, app screens, app logic layer, app components. Each finished in 40–140 s and
+  found 13–15 items.
+- **The same root cause showed up in several slices.** A paragraph splitter was copied six times
+  across server modules, and an Arabic-marks regex eight times across the app, with a server copy
+  too. A Supabase env lookup appeared in two reviewers' lists. Dedupe across slices before ranking.
+- **"Unused" claims need checking.** Some were right, but several "dead" functions were used only
+  by tests. Decide whether test-only code stays or goes, together with its tests; don't just delete it.
+  A name grep can also match a longer name (`ListRow` inside `FlashcardListRow`). Grep with word
+  boundaries (`grep -w`).
+- **Shell gotcha:** in zsh, `grep --include=*.py` fails with "no matches found" because zsh expands
+  the glob. Quote it (`--include='*.py'`) or pass file globs directly.
+- **Deterministic tools would have saved effort.** Reviewers hand-found dead code and duplication
+  that knip, vulture and jscpd report in seconds. Run the sweep first.
+- **Reviewers found one real bug while looking for complexity:** an onboarding Skip that used an
+  unsaved choice. Keep correctness in scope even on a "cleanup" review.
+- **Live services ran from the working tree.** That meant the API (launchd), Metro and a symlinked
+  config repo. Switching branches in the main checkout silently changed what the phone and the
+  global config used. All cleanup ran in worktrees, with their own ports and scratch data copies.
+- **Server refactors were proven by diffing JSON responses** from the old (live) and new (worktree)
+  servers for the same requests, on top of the test suite.
+- **Some differences that look like duplication are deliberate,** for example regex character
+  ranges that differ for parity with another component. A finder should flag them as "check before
+  merging", not "merge".

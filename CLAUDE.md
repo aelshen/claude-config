@@ -22,7 +22,7 @@ Otherwise do it inline: a known file, a one-line fix, or a tightly coupled seque
 | Tier | Who | Use for | Agents |
 |------|-----|---------|--------|
 | **Opus** | Main session, `Plan` | Planning, specs, architecture, trade-offs, decomposing work, writing briefs, reviewing what came back, final answers to the user | (you), `Plan`, `ultrathink-debugger` |
-| **Sonnet** | Subagents (the default) | One scoped outcome end to end: a feature slice, a reproduced bug, a migration step, a review or verification pass | `implementer`, `general-purpose`, `oathkeeper`, `code-quality-pragmatist`, `project-manager`, `workflow-orchestrator` |
+| **Sonnet** | Subagents (the default) | One scoped outcome end to end: a feature slice, a reproduced bug, a migration step, a review or verification pass | `implementer`, `general-purpose`, `oathkeeper`, `code-quality-pragmatist`, `review-finder`, `review-verifier`, `project-manager`, `workflow-orchestrator` |
 | **Haiku** | Subagents | Volume and speed: search, retrieval, reading logs/docs, listing call sites; mechanical edits at volume that are already fully specified | `Explore`, `fixer` |
 
 How it's wired: each agent's frontmatter sets its `model`/`effort`; `Explore` here overrides the built-in one (which would otherwise run on Opus); `CLAUDE_CODE_SUBAGENT_MODEL=sonnet` in settings makes Sonnet the default for any agent without its own model (e.g. `general-purpose`). A `model` passed on the Agent call beats all of these.
@@ -141,6 +141,7 @@ Before creating pull requests, would run:
 | Find/gather across the codebase | Direct: Explore (parallel per question) | <1 min | 1-4 |
 | Apply a decided, small change | Direct: fixer, then read the diff | 1 min | 1 |
 | Build a scoped task from a plan | Direct: implementer per task (disjoint files) | 3-10 min | 1-3 |
+| Quality review or cleanup of a repo or area | `review-cleanup` skill: sweep, parallel review-finders, verify, rank; cleanup in worktrees on approval | 5-15 min | 5-10 |
 
 ### Available Custom Agents
 
@@ -155,6 +156,8 @@ Model per agent is in its frontmatter; see Model Tiering above.
 - **workflow-orchestrator** - Master coordinator for comprehensive QA
 - **oathkeeper** - Reality check for actual vs claimed completion
 - **code-quality-pragmatist** - Review for over-engineering and unnecessary complexity
+- **review-finder** (sonnet) - One slice of a review, evidence required; used by the `review-cleanup` skill
+- **review-verifier** (sonnet) - Skeptically checks review findings before they reach the user
 
 **Project Management:**
 - **project-manager** - Track progress, update checklists, verify compliance
