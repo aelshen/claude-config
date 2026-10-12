@@ -35,6 +35,7 @@ For per-project use instead, copy `CLAUDE.md` into the project root.
 | `agents/` | The sub-agents described below, each pinned to a model tier |
 | `budget/` | Status line + hooks that show Claude its context use and plan limits |
 | `skills/session-handoff/` | Writes resume notes; the budget rules call it |
+| `skills/review-cleanup/` | Code review and cleanup: a deterministic tool sweep, parallel `review-finder`s per slice, a `review-verifier` per finding, ranked report, then behaviour-preserving cleanup in worktrees on approval. Built from an October 2026 survey of agentic review (`references/research.md`) |
 | `skills/promo-assets/` | App Store screenshots, app previews, promo videos and link cards from code, in any brand. Ships Side Quest brands; private brands (licensed fonts, client logos) load from outside the repo. Setup: ffmpeg + its `scripts/setup.sh` |
 | `settings.json` | Main model, subagent default model, status line and hooks |
 
@@ -128,6 +129,14 @@ Reviews code for over-engineering, unnecessary complexity, and pragmatic quality
 
 **Time:** 1-2 minutes
 
+### review-finder and review-verifier (sonnet)
+
+The two halves of a review in the `review-cleanup` skill. A **finder** reviews one slice through the
+lenses it's given (simplicity, errors, tests, consistency, correctness) and must back every finding
+with `file:line` evidence. A **verifier** gets only the claims and tries to refute each one from the
+code, so unproven findings never reach you. Use them through the skill; it handles slicing,
+deduping, ranking and the cleanup loop.
+
 ### ultrathink-debugger
 Deep debugging specialist for complex issues, mysterious bugs, and production problems.
 
@@ -204,6 +213,14 @@ Planned automatic hooks (not yet implemented):
 - Provide file:line references for code issues
 - Prioritize Critical > High > Medium > Low
 - Acknowledge strengths alongside improvements
+
+## Not in this repo
+
+Some skills in `~/.claude/skills/` aren't managed here, on purpose:
+- **Third-party skills** cloned from their own repos (for example `fluidplan`). Update them with
+  `git pull` in their folder.
+- **`synced`**, managed by Claude itself.
+- **Project-specific skills** belong in that project's `.claude/skills/`, not in this public repo.
 
 ## Contributing
 
