@@ -35,6 +35,7 @@ For per-project use instead, copy `CLAUDE.md` into the project root.
 | `agents/` | The sub-agents described below, each pinned to a model tier |
 | `budget/` | Status line + hooks that show Claude its context use and plan limits |
 | `skills/session-handoff/` | Writes resume notes; the budget rules call it |
+| `skills/promo-assets/` | App Store screenshots, app previews, promo videos and link cards from code, in any brand. Ships Side Quest brands; private brands (licensed fonts, client logos) load from outside the repo. Setup: ffmpeg + its `scripts/setup.sh` |
 | `settings.json` | Main model, subagent default model, status line and hooks |
 
 ## Model tiering

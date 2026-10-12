@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>App Store screenshots</title>
+<link rel="stylesheet" href="lib/promo.css">
+<style>
+  /* One screenshot: headline block on top, the phone below, running off the bottom edge. */
+  .board-copy { position: absolute; left: calc(100 * var(--u)); right: calc(100 * var(--u)); top: calc(190 * var(--u)); text-align: center; }
+  .board-copy .h1 { font-size: calc(92 * var(--u)); }
+  .board-copy .body { margin-top: calc(28 * var(--u)); font-size: calc(40 * var(--u)); }
+  .board-copy .ar { margin-top: calc(18 * var(--u)); font-size: calc(46 * var(--u)); }
+  .board-phone { position: absolute; left: 50%; transform: translateX(-50%); top: calc(760 * var(--u)); }
+  .board-phone .phone { width: calc(820 * var(--u)); }
+  .sample { position: absolute; top: calc(120 * var(--u)); left: 0; right: 0; text-align: center; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<script src="data.js"></script>
+<script src="brand/brand.js"></script>
+<script>
+  // Build one <section data-board> per entry in DATA.boards.
+  const stage = document.getElementById("stage");
+  for (const b of DATA.boards) {
+    const s = document.createElement("section");
+    s.dataset.board = b.id; s.className = b.surface || "s-bg";
+    s.innerHTML = `
+      ${DATA.SAMPLE ? '<p class="sample kicker">Sample</p>' : ""}
+      <div class="board-copy">
+        <h1 class="h1"></h1>
+        ${b.ar ? '<p class="ar" lang="ar"></p>' : ""}
+        <p class="body muted"></p>
+      </div>
+      <div class="board-phone" data-bleed><div class="phone"><img alt=""></div></div>`;
+    s.querySelector("h1").textContent = b.headline;
+    s.querySelector(".body").textContent = b.sub || "";
+    if (b.ar) s.querySelector(".ar").textContent = b.ar;
+    s.querySelector(".phone img").src = b.shot;
+    stage.append(s);
+  }
+</script>
+<script src="lib/promo.js"></script>
+<script>
+  Promo.boards({ ...DATA.size, boards: DATA.boards.map(b => ({ id: b.id })) });
+</script>
+</body>
+</html>
