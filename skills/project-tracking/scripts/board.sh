@@ -113,7 +113,7 @@ case "$cmd" in
         else empty end')"
     unlinked="$(jq -r '.[] | select((.closingIssuesReferences | length) == 0
       and ([.labels[].name] | index("no-issue") | not)
-      and ((.body // "") | test("(?i)\\b(close[sd]?|fix(e[sd])?|resolve[sd]?|refs?|part of)\\s+([\\w.-]+/[\\w.-]+)?#[0-9]+") | not))
+      and ((.body // "") | gsub("(?s)```.*?```"; "") | gsub("`[^`]*`"; "") | test("(?i)\\b(close[sd]?|fix(e[sd])?|resolve[sd]?|refs?|part of)\\s+([\\w.-]+/[\\w.-]+)?#[0-9]+") | not))
       | "PR #\(.number) \(.title)"' <<< "$merged")"
     if [ -z "$actions" ]; then echo "Board in step with issues."; else
       echo "Drift ($( [ "$apply" = true ] && echo fixing || echo "dry run; --apply to fix")):"
