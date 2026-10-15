@@ -29,7 +29,9 @@ Why each rule exists (October 2026 audit of kuudoh, arabayya and playpatch):
    issue takes several PRs (cross-repo `owner/repo#N` works). Unplanned work (ops, infra,
    hotfix) gets a short `type:chore` issue first, two lines is fine. The only exemption is
    the `no-issue` label, for notes or handoff-only PRs and dependency bumps.
-   `.github/workflows/pr-links-issue.yml` enforces it.
+   `.github/workflows/pr-links-issue.yml` enforces it when GitHub Actions can run. If Actions
+   is unavailable (billing block, disabled org), the check silently never runs: jobs "fail"
+   with zero steps. Then `board.sh sync` at session start is the only backstop, so don't skip it.
 2. **Board columns** are exactly `Backlog, Ready, In progress, In review, Done`. **Priority** is
    a single-select board field `P0–P3`. The built-in workflows **Item closed**, **Pull request
    merged**, **Pull request linked to issue** and **Auto-add to project** are on.
@@ -98,6 +100,12 @@ costs or security details in them.
   board. Public PRs reference it with `Refs owner/<repo>-planning#N`, which the PR check accepts
   and which shows only a number to outsiders. Keep outside-contributor templates (and their
   `CONTRIBUTING.md` flow) as they are; add the standard forms alongside them.
+- Don't paste planning-issue titles or contents into public PR bodies or commit messages;
+  describe the change itself. A cross-repo reference reveals only that the planning repo exists.
+- Keep each design in one place: either its docs move into the planning repo with the issues,
+  or they stay where they are and the issue links to them. Never split one design across both.
+- A private planning repo needs Actions billing for any automation; the public repo's
+  Actions minutes are free.
 
 ## Changing the standard
 
