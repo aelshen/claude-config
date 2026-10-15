@@ -73,8 +73,9 @@ so they work immediately after creating an issue (item-list lags minutes behind 
 
 1. **Board**: create one if there is none (`gh project create --owner <org|user> --title "<repo> roadmap"`,
    then link the repo with `gh project link`). Write `.github/board.env`:
-   `BOARD_OWNER=`, `BOARD_PROJECT=`, `BOARD_SINCE=<today>` (PRs merged before adoption
-   aren't flagged).
+   `BOARD_OWNER=`, `BOARD_PROJECT=`, `BOARD_SINCE=<the day after adoption>`. PRs merged
+   before that aren't flagged. The date is inclusive, so today's date would flag the PRs merged
+   earlier today, before the standard existed.
 2. **By hand in the board UI** (no API for these): rename the Status options to the five
    columns, and switch on the four workflows (Project → ⋯ → Workflows).
 3. **Fill in `docs/WORKFLOW.md`** placeholders and its "Project-specific" section: area labels,
@@ -83,7 +84,9 @@ so they work immediately after creating an issue (item-list lags minutes behind 
 4. **Replace a local `scripts/board.sh`** with `assets/board-shim.sh` once the shared one does
    everything the local one did.
 5. **Migrate priority labels** (if any) into the Priority field, then delete the labels:
-   for each `P<n>` labelled open issue, `scripts/board.sh prio <N> P<n>`.
+   for each `P<n>` labelled issue, `scripts/board.sh prio <N> P<n>`. Setting a field adds the
+   issue to the board if it isn't there, and a closed one lands with no Status, so run
+   `scripts/board.sh sync --apply` **after** the migration to put those in Done.
 6. Re-run `audit.sh` until it has no FAIL. Commit as one PR (with its own `type:chore` issue).
 
 Change existing repo conventions only with the user's agreement, and in the session that owns

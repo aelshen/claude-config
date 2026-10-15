@@ -15,7 +15,7 @@
 #   BOARD_OWNER=Kuudoh        # org or user that owns the Project
 #   BOARD_PROJECT=1           # project number
 #   BOARD_REPO=Kuudoh/kuudoh  # optional; defaults to the current repo
-#   BOARD_SINCE=2026-10-06    # optional; PRs merged before this (pre-adoption) aren't flagged
+#   BOARD_SINCE=2026-10-07    # optional, inclusive; set it to the day AFTER adoption
 # Needs gh (with the `project` scope: gh auth refresh -s project) and jq.
 # Bash 3.2 compatible (macOS /bin/bash).
 set -euo pipefail
