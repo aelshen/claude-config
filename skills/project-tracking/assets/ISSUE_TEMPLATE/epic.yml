@@ -1,0 +1,35 @@
+name: Epic
+description: A multi-PR initiative. Its tasks are attached as sub-issues so the board shows progress.
+title: "Epic: "
+labels: ["type:epic"]
+body:
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: The problem, where it came from, and what success looks like.
+    validations:
+      required: true
+  - type: textarea
+    id: shape
+    attributes:
+      label: Shape of the solution
+      description: The flow end to end, the key decisions (with defaults), links to design docs.
+    validations:
+      required: true
+  - type: textarea
+    id: checks
+    attributes:
+      label: Project checks
+      description: The rules this repo never breaks, as a checklist.  # project: e.g. privacy, money, doctrine checks
+  - type: textarea
+    id: tasks
+    attributes:
+      label: Tasks
+      description: Planned slices. Each becomes a sub-issue when it is specced.
+      value: |
+        - [ ]
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of scope

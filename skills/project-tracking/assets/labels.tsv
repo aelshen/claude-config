@@ -1,0 +1,16 @@
+# name	color	description   (area:* labels are per repo; add at least one)
+type:epic	3E4B9E	Multi-PR initiative; tasks are sub-issues
+type:feature	1D76DB	New capability
+type:story	0E8A16	One slice of an epic or feature, one PR
+type:bug	D73A4A	Something behaves wrongly
+type:chore	C5DEF5	Ops, infra, cleanup, docs, dependencies
+type:spike	FBCA04	Time-boxed investigation or decision
+size:S	EDEDED	Under about an hour for an agent
+size:M	BFBFBF	A few hours
+size:L	7F7F7F	Split it before it is Ready
+needs-spec	F9D0C4	Not Ready: scope or acceptance criteria missing
+blocked	B60205	Waiting on another issue or a decision
+no-issue	FFFFFF	PR exempt from the issue-link check (notes, handoff, dependency bumps only)
+agent:haiku	D4C5F9	Implementer tier: mechanical, exact spec
+agent:sonnet	A28CF0	Implementer tier: standard feature work
+agent:opus	6F42C1	Implementer tier: architecture or judgment-heavy
