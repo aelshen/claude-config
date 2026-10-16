@@ -84,10 +84,12 @@ forget_item() {
 item_for() { # issue number -> project item id. Cached; on a miss item-add (idempotent) returns
   # the id directly, so this never waits on item-list (which lags minutes behind adds).
   local id
+  case "$1" in ''|*[!0-9]*) die "not an issue number: '$1'" ;; esac
   id="$(cached_item "$1")"
   if [ -z "$id" ]; then
     id="$(gh project item-add "$BOARD_PROJECT" --owner "$BOARD_OWNER" \
       --url "https://github.com/$BOARD_REPO/issues/$1" --format json --jq .id)"
+    [ -n "$id" ] || die "no project item for #$1 (not an issue number, or gh returned nothing)"
     mkdir -p "$(dirname "$items_cache")"
     printf '%s\t%s\t%s\n' "$BOARD_REPO" "$1" "$id" >> "$items_cache"
   fi
