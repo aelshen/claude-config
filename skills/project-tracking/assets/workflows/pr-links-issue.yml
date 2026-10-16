@@ -1,0 +1,41 @@
+# Every PR names the issue it works on, or carries the `no-issue` label.
+# Installed by the project-tracking skill (claude-config).
+#
+# Accepted in the PR body: "Closes #12", "Fixes #12", "Resolves #12" (close the
+# issue on merge), "Refs #12" / "Part of #12" (link without closing, for an issue
+# that takes several PRs). A cross-repo form works too: "Refs owner/repo#12".
+# `no-issue` is for notes-only, handoff and dependency-bump PRs, nothing else.
+name: PR links an issue
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, labeled, unlabeled]  # not synchronize: pushes don't change the body, and each run bills a minute
+
+permissions: {}
+
+jobs:
+  links-issue:
+    # Skip events that can't change the result (each run bills a minute): edits that
+    # leave the body alone, and labels other than no-issue.
+    if: >-
+      (github.event.action != 'edited' || github.event.changes.body) &&
+      ((github.event.action != 'labeled' && github.event.action != 'unlabeled') ||
+       github.event.label.name == 'no-issue')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the PR body for an issue reference
+        env:
+          # Passed through env, never interpolated into the script.
+          BODY: ${{ github.event.pull_request.body }}
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ' ') }}
+        run: |
+          if printf ' %s ' "$LABELS" | grep -q ' no-issue '; then
+            echo "no-issue label: skipped"; exit 0
+          fi
+          # Ignore code (fenced blocks and `inline`), as GitHub does when it links issues.
+          text="$(printf '%s\n' "$BODY" | awk '/^[[:space:]]*```/ { f = !f; next } !f' | sed -E 's/`[^`]*`//g')"
+          if printf '%s' "$text" | grep -Eiq '(close[sd]?|fix(e[sd])?|resolve[sd]?|refs?|part of)[[:space:]]+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)?#[0-9]+'; then
+            echo "issue reference found"; exit 0
+          fi
+          echo "::error::Add 'Closes #N' (or 'Refs #N') to the PR description, or the no-issue label for notes-only/handoff/dependency PRs."
+          exit 1

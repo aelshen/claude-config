@@ -200,6 +200,10 @@ Claude: "I'll use ultrathink-debugger to investigate this edge case"
 [Total: ~4 minutes, identifies currency rounding bug]
 ```
 
+## Project Tracking (all repos)
+
+Track work the same way in every repo, following the `project-tracking` skill: every PR names an issue (`Closes #N`; unplanned ops/infra work gets a short `type:chore` issue first), cards move Backlog → Ready → In progress → In review → Done, and Priority is the board's P0–P3 field. In a repo with `.github/board.env`, run `scripts/board.sh sync` at the start of a session. Change the standard in the skill, never in one repo's copy.
+
 ## Communication Preferences
 
 - Be concise and direct

@@ -1,0 +1,30 @@
+name: Bug
+description: Something behaves wrongly.
+labels: ["type:bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happens vs. what should happen
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Repro
+      description: Steps, environment, data. Where was it seen?
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact
+      description: Who is affected and how badly.  # project: list this repo's impact classes (money, privacy, data loss, demo-only, ...)
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      value: |
+        - [ ] A regression test fails before the fix and passes after
+    validations:
+      required: true

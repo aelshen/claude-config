@@ -36,6 +36,7 @@ For per-project use instead, copy `CLAUDE.md` into the project root.
 | `budget/` | Status line + hooks that show Claude its context use and plan limits |
 | `skills/session-handoff/` | Writes resume notes; the budget rules call it |
 | `skills/review-cleanup/` | Code review and cleanup: a deterministic tool sweep, parallel `review-finder`s per slice, a `review-verifier` per finding, ranked report, then behaviour-preserving cleanup in worktrees on approval. Built from an October 2026 survey of agentic review (`references/research.md`) |
+| `skills/project-tracking/` | One GitHub issue-and-board standard for every repo: issue forms, labels, a Projects board with Priority, a CI check that every PR links an issue, a shared `board.sh` (with `sync` to fix drift) and `audit.sh` to score or set up a repo |
 | `skills/promo-assets/` | App Store screenshots, app previews, promo videos and link cards from code, in any brand. Ships Side Quest brands; private brands (licensed fonts, client logos) load from outside the repo. Setup: ffmpeg + its `scripts/setup.sh` |
 | `settings.json` | Main model, subagent default model, status line and hooks |
 

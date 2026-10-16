@@ -1,0 +1,48 @@
+name: Task
+description: One slice of work for one PR (a story, chore, feature or spike). Small enough for one agent to build and one reviewer to check.
+labels: ["type:story"]
+body:
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Why this matters and what exists today. Link files, the parent epic, prior PRs, screenshots.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: Exactly what to build or change.
+    validations:
+      required: true
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of scope
+      description: Tempting adjacent work that must NOT be done in this issue.
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Checkable statements. The reviewer verifies each one.
+      value: |
+        - [ ]
+    validations:
+      required: true
+  - type: textarea
+    id: files
+    attributes:
+      label: Files likely touched
+  - type: textarea
+    id: verify
+    attributes:
+      label: How to verify
+      description: Commands to run and what to look at.  # project: put this repo's test/lint commands in `value`
+    validations:
+      required: true
+  - type: input
+    id: depends
+    attributes:
+      label: Blocked by
+      description: "Issues that must merge first, e.g. #12, #14"
