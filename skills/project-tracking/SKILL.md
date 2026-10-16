@@ -75,10 +75,15 @@ so they work immediately after creating an issue (item-list lags minutes behind 
    then link the repo with `gh project link`). The board must belong to the repo's owner: GitHub
    can't link a personal board to an org repo, so it never shows on the repo's Projects tab. Write `.github/board.env`:
    `BOARD_OWNER=`, `BOARD_PROJECT=`, `BOARD_SINCE=<the day after adoption>`. PRs merged
-   before that aren't flagged. The date is inclusive, so today's date would flag the PRs merged
-   earlier today, before the standard existed.
-2. **By hand in the board UI** (no API for these): rename the Status options to the five
-   columns, and switch on the four workflows (Project → ⋯ → Workflows).
+   before that aren't flagged. The date is inclusive and compared in UTC, so today's date would
+   flag PRs merged earlier today, before the standard existed; west of UTC, an evening merge is
+   already tomorrow in UTC, so use the day after that. A repo that has no PR check on purpose
+   (a planning repo with hardly any PRs) sets `BOARD_PR_CHECK=off`.
+2. **Status columns**: on a new, empty board set them by API (`updateProjectV2Field` with
+   `singleSelectOptions` for the five names). That replaces the options, so on a board that
+   already has cards rename them in the UI instead (existing card values may not survive).
+   **By hand in the board UI** (no API): switch on the four workflows (Project → ⋯ → Workflows).
+   The scripts are bash; run any label or field loop under bash, not zsh.
 3. **Fill in `docs/WORKFLOW.md`** placeholders and its "Project-specific" section: area labels,
    roles, the repo's verify commands, hard rules. Put the repo's test commands into the
    `How to verify` default of the task form.

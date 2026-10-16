@@ -27,6 +27,10 @@ place() { # asset path, repo path: copy if missing (with --fix)
   if [ "$fix" = true ]; then mkdir -p "$(dirname "$2")"; cp "$assets/$1" "$2"; echo "  ADDED $2"; else fail "$2 missing"; fi
 }
 
+env_file="${BOARD_ENV:-.github/board.env}"
+# shellcheck disable=SC1090
+[ -f "$env_file" ] && . "$env_file"
+
 echo "Project tracking audit: $repo"
 
 echo "Files"
@@ -40,7 +44,8 @@ pr_tpl="$(ls .github/pull_request_template.md .github/PULL_REQUEST_TEMPLATE.md 2
 if [ -z "$pr_tpl" ]; then place pull_request_template.md .github/pull_request_template.md
 elif grep -Eiq '(closes|fixes|refs) #' "$pr_tpl"; then pass "$pr_tpl asks for an issue link"
 else warn "$pr_tpl doesn't ask for 'Closes #N'"; fi
-place workflows/pr-links-issue.yml .github/workflows/pr-links-issue.yml
+if [ "${BOARD_PR_CHECK:-on}" = off ]; then pass "PR check off by config (BOARD_PR_CHECK=off)"
+else place workflows/pr-links-issue.yml .github/workflows/pr-links-issue.yml; fi
 if [ -e scripts/board.sh ]; then
   if grep -q "project-tracking" scripts/board.sh; then pass "scripts/board.sh uses the shared helper"
   else warn "scripts/board.sh is a local copy; replace it with the shim (assets/board-shim.sh) so fixes reach every repo"; fi
@@ -61,11 +66,8 @@ printf '%s\n' "$have" | grep -q '^area:' && pass "area:* labels defined" || fail
 printf '%s\n' "$have" | grep -Eqx 'P[0-3]' && warn "P0-P3 labels exist: priority belongs in the board's Priority field (labels can't sort the board)"
 
 echo "Board"
-env_file="${BOARD_ENV:-.github/board.env}"
 if [ ! -f "$env_file" ]; then fail ".github/board.env missing (BOARD_OWNER, BOARD_PROJECT, BOARD_SINCE)"
 else
-  # shellcheck disable=SC1091
-  . "$env_file"
   fields="$(gh project field-list "$BOARD_PROJECT" --owner "$BOARD_OWNER" --format json 2>/dev/null)"
   if [ -z "$fields" ]; then fail "can't read project $BOARD_OWNER/$BOARD_PROJECT (gh auth refresh -s project?)"
   else

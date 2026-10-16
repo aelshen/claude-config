@@ -16,6 +16,8 @@
 #   BOARD_PROJECT=1           # project number
 #   BOARD_REPO=Kuudoh/kuudoh  # optional; defaults to the current repo
 #   BOARD_SINCE=2026-10-07    # optional, inclusive; set it to the day AFTER adoption
+#                             # (compared in UTC: evening merges west of UTC are already tomorrow)
+#   BOARD_PR_CHECK=off        # optional: repo has no PR check on purpose (e.g. a planning repo)
 # Needs gh (with the `project` scope: gh auth refresh -s project) and jq.
 # Bash 3.2 compatible (macOS /bin/bash).
 set -euo pipefail
