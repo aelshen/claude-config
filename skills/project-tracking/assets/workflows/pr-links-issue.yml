@@ -9,7 +9,7 @@ name: PR links an issue
 
 on:
   pull_request:
-    types: [opened, edited, reopened, synchronize, labeled, unlabeled]
+    types: [opened, edited, reopened, labeled, unlabeled]  # not synchronize: pushes don't change the body, and each run bills a minute
 
 permissions: {}
 

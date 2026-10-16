@@ -126,7 +126,8 @@ Private repos share the org's Actions minutes; in October 2026 three repos used 
 - Path-filtered jobs can't be required status checks. On the free plan private repos have no
   branch protection, so this doesn't matter there.
 
-The PR check (`pr-links-issue.yml`) runs no checkout and finishes in seconds; it stays unfiltered.
+The PR check (`pr-links-issue.yml`) has no checkout and runs only when the PR body or labels
+change, not on every push.
 
 Also budget GitHub's GraphQL limit (5,000 points an hour plus a burst limit, shared by every
 session on the account): never run `board.sh list` or `sync` in a loop, and pace bulk board
