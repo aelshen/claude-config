@@ -125,9 +125,11 @@ Private repos share the org's Actions minutes; in October 2026 three repos used 
 
 - Run each job only when its part of the repo changes (`paths` / `paths-ignore`). Docs-only and
   HANDOFF-only changes run nothing.
-- PR runs get `concurrency: { group: ${{ github.workflow }}-${{ github.ref }}, cancel-in-progress: true }`.
-- Slow jobs (Docker builds, e2e) run only on `main`, on a `full-ci` label, or by hand
-  (`workflow_dispatch`).
+- **CI runs on merge, not on every push:** `push: branches: [main]` plus `workflow_dispatch`.
+  No plain `pull_request` trigger. For a run before merge, use `pull_request: types: [labeled]`
+  with a job-level `if: github.event.label.name == 'full-ci'`. Every failed run emails the owner,
+  so per-push CI on a blocked or broken org floods their inbox.
+- Any PR-triggered run gets `concurrency: { group: ${{ github.workflow }}-${{ github.ref }}, cancel-in-progress: true }`.
 - Skip with a job-level `if:` rather than a step that exits early: a skipped job costs nothing,
   and every job that starts bills at least a minute.
 - Path-filtered jobs can't be required status checks. On the free plan private repos have no
