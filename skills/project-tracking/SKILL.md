@@ -71,8 +71,9 @@ so they work immediately after creating an issue (item-list lags minutes behind 
 `--fix` adds missing labels, forms, PR template, the PR check, `docs/WORKFLOW.md`,
 `scripts/board.sh` (the shim) and the Priority field. It never overwrites a file or label. Then:
 
-1. **Board**: create one if there is none (`gh project create --owner <org|user> --title "<repo> roadmap"`,
-   then link the repo with `gh project link`). Write `.github/board.env`:
+1. **Board**: create one if there is none (`gh project create --owner <repo owner> --title "<repo> roadmap"`,
+   then link the repo with `gh project link`). The board must belong to the repo's owner: GitHub
+   can't link a personal board to an org repo, so it never shows on the repo's Projects tab. Write `.github/board.env`:
    `BOARD_OWNER=`, `BOARD_PROJECT=`, `BOARD_SINCE=<the day after adoption>`. PRs merged
    before that aren't flagged. The date is inclusive, so today's date would flag the PRs merged
    earlier today, before the standard existed.
