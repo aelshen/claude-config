@@ -132,7 +132,8 @@ other than `no-issue`.
 
 Also budget GitHub's GraphQL limit (5,000 points an hour plus a burst limit, shared by every
 session on the account): never run `board.sh list` or `sync` in a loop, and pace bulk board
-edits. `gh api rate_limit` can say there is quota left while calls are being rejected.
+edits. `gh api rate_limit` can say there is quota left while calls are being rejected. While
+limited, `gh project` reports "unknown owner type", which is the limit, not a config problem.
 
 ## Changing the standard
 
