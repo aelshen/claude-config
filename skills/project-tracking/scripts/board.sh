@@ -16,11 +16,27 @@
 #   BOARD_PROJECT=1           # project number
 #   BOARD_REPO=Kuudoh/kuudoh  # optional; defaults to the current repo
 #   BOARD_SINCE=2026-10-07    # optional, inclusive; set it to the day AFTER adoption
+#                             # (compared in UTC: evening merges west of UTC are already tomorrow)
+#   BOARD_PR_CHECK=off        # optional: repo has no PR check on purpose (e.g. a planning repo)
 # Needs gh (with the `project` scope: gh auth refresh -s project) and jq.
 # Bash 3.2 compatible (macOS /bin/bash).
 set -euo pipefail
 
 die() { echo "board.sh: $*" >&2; exit 1; }
+
+gh() { # pass-through; explain the error gh prints for a rate-limited `gh project` call
+  local err rc=0
+  err="$(mktemp)"
+  command gh "$@" 2> "$err" || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    cat "$err" >&2
+    if grep -qiE 'unknown owner type|rate limit' "$err"; then
+      echo "board.sh: GitHub's GraphQL limit (account-wide; 'gh api rate_limit' can still show quota). Wait a few minutes and retry once; don't loop." >&2
+    fi
+  fi
+  rm -f "$err"
+  return "$rc"
+}
 
 root="$(git rev-parse --show-toplevel 2>/dev/null)" || die "not inside a git repo"
 env_file="${BOARD_ENV:-$root/.github/board.env}"  # BOARD_ENV: audit a repo without writing into it
