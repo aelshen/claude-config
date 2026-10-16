@@ -58,8 +58,10 @@ Why each rule exists (October 2026 audit of kuudoh, arabayya and playpatch):
 - **Follow-ups you notice:** file them as issues (Backlog, with priority), don't fold them in.
 - **End:** everything you touched is in the right column.
 
-`board.sh add/move/prio` use `gh project item-add`, which is idempotent and returns the item id,
-so they work immediately after creating an issue (item-list lags minutes behind adds).
+`board.sh add/move/prio` get the item id from `gh project item-add`, which is idempotent and returns
+it, so they work immediately after creating an issue (item-list lags minutes behind adds). The id
+is cached per owner+project (in the git common dir, shared by worktrees), so later moves skip
+item-add and spend less of the GraphQL budget; a stale id (card deleted) is dropped and retried once.
 
 ## Set up or audit a repo
 

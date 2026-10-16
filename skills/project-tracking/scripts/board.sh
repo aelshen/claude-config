@@ -18,6 +18,8 @@
 #   BOARD_SINCE=2026-10-07    # optional, inclusive; set it to the day AFTER adoption
 #                             # (compared in UTC: evening merges west of UTC are already tomorrow)
 #   BOARD_PR_CHECK=off        # optional: repo has no PR check on purpose (e.g. a planning repo)
+# Issue# -> item ids are cached per owner+project (git common dir, so worktrees share it;
+# ~/.cache/project-tracking outside git), so move/prio skip item-add after the first touch.
 # Needs gh (with the `project` scope: gh auth refresh -s project) and jq.
 # Bash 3.2 compatible (macOS /bin/bash).
 set -euo pipefail
@@ -65,10 +67,31 @@ lookup() { # field name, option name -> "fieldId<TAB>optionId" (empty if unknown
 
 project_id() { [ -s "$cache" ] || refresh; awk -F'\t' '$1 == "__project" { print $2; exit }' "$cache"; }
 
-item_for() { # issue number -> project item id. item-add is idempotent and returns the id
-  # directly, so this never waits on item-list (which lags minutes behind adds).
-  gh project item-add "$BOARD_PROJECT" --owner "$BOARD_OWNER" \
-    --url "https://github.com/$BOARD_REPO/issues/$1" --format json --jq .id
+# Issue# -> item id cache, one file per owner+project like $cache. It sits in the git common dir
+# (shared by every worktree), or next to $cache outside git. Lines: "<repo>\t<issue#>\t<item id>".
+common="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || common=""
+if [ -n "$common" ]; then items_cache="$common/project-tracking/${BOARD_OWNER}-${BOARD_PROJECT}.items.tsv"
+else items_cache="${cache%.tsv}.items.tsv"; fi
+
+cached_item() { [ -s "$items_cache" ] && awk -F'\t' -v r="$BOARD_REPO" -v n="$1" '$1 == r && $2 == n { print $3; exit }' "$items_cache" || true; }
+
+forget_item() {
+  [ -s "$items_cache" ] || return 0
+  awk -F'\t' -v r="$BOARD_REPO" -v n="$1" '!($1 == r && $2 == n)' "$items_cache" > "$items_cache.tmp" || true
+  mv "$items_cache.tmp" "$items_cache"
+}
+
+item_for() { # issue number -> project item id. Cached; on a miss item-add (idempotent) returns
+  # the id directly, so this never waits on item-list (which lags minutes behind adds).
+  local id
+  id="$(cached_item "$1")"
+  if [ -z "$id" ]; then
+    id="$(gh project item-add "$BOARD_PROJECT" --owner "$BOARD_OWNER" \
+      --url "https://github.com/$BOARD_REPO/issues/$1" --format json --jq .id)"
+    mkdir -p "$(dirname "$items_cache")"
+    printf '%s\t%s\t%s\n' "$BOARD_REPO" "$1" "$id" >> "$items_cache"
+  fi
+  printf '%s\n' "$id"
 }
 
 set_option() { # item id, field name, option name
@@ -82,6 +105,17 @@ set_option() { # item id, field name, option name
     --field-id "${ids%%$'\t'*}" --single-select-option-id "${ids#*$'\t'}" > /dev/null
 }
 
+set_for() { # issue number, field name, option name. A cached id can be stale (card deleted):
+  # if the edit fails on one, drop it and retry once through item-add.
+  local id cached
+  cached="$(cached_item "$1")"; id="$(item_for "$1")"
+  if [ -n "$cached" ] && ! set_option "$id" "$2" "$3"; then
+    forget_item "$1"; set_option "$(item_for "$1")" "$2" "$3"
+  else
+    [ -n "$cached" ] || set_option "$id" "$2" "$3"
+  fi
+}
+
 items_json() { # this repo's board items as [{n, status, priority, id}]
   gh project item-list "$BOARD_PROJECT" --owner "$BOARD_OWNER" --limit 2000 --format json |
     jq --arg r "$BOARD_REPO" '[.items[] | select(.content.repository == $r and .content.type == "Issue")
@@ -92,17 +126,16 @@ cmd="${1:-}"; [ $# -gt 0 ] && shift
 case "$cmd" in
   add)
     [ $# -ge 1 ] || die "usage: board.sh add <issue#> [Column] [P0-P3]"
-    item="$(item_for "$1")"
-    set_option "$item" Status "${2:-Backlog}"
-    [ -n "${3:-}" ] && set_option "$item" Priority "$3"
+    set_for "$1" Status "${2:-Backlog}"
+    if [ -n "${3:-}" ]; then set_for "$1" Priority "$3"; fi
     echo "#$1 → ${2:-Backlog}${3:+ ($3)}" ;;
   move)
     [ $# -eq 2 ] || die "usage: board.sh move <issue#> <Column>"
-    set_option "$(item_for "$1")" Status "$2"
+    set_for "$1" Status "$2"
     echo "#$1 → $2" ;;
   prio)
     [ $# -eq 2 ] || die "usage: board.sh prio <issue#> <P0-P3>"
-    set_option "$(item_for "$1")" Priority "$2"
+    set_for "$1" Priority "$2"
     echo "#$1 priority $2" ;;
   list)
     items_json | jq -r --arg c "${1:-}" '.[] | select($c == "" or .status == $c)
@@ -135,12 +168,12 @@ case "$cmd" in
       echo "Drift ($( [ "$apply" = true ] && echo fixing || echo "dry run; --apply to fix")):"
       while IFS=$'\t' read -r n col why; do
         echo "  #$n → $col   ($why)"
-        if [ "$apply" = true ]; then set_option "$(item_for "$n")" Status "$col"; fi
+        if [ "$apply" = true ]; then set_for "$n" Status "$col"; fi
       done <<< "$actions"
     fi
     if [ -n "$unlinked" ]; then
       echo "Merged PRs (last 30${BOARD_SINCE:+, since $BOARD_SINCE}) with no issue link and no no-issue label:"
       echo "$unlinked" | sed 's/^/  /'
     fi ;;
-  *) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; [ -z "$cmd" ] || exit 2 ;;
+  *) sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; [ -z "$cmd" ] || exit 2 ;;
 esac
