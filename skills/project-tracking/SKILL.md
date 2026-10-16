@@ -111,6 +111,27 @@ costs or security details in them.
 - A private planning repo needs Actions billing for any automation; the public repo's
   Actions minutes are free.
 
+## CI minutes (private repos)
+
+Private repos share the org's Actions minutes; in October 2026 three repos used up the free
+2,000 halfway through the month. In every private repo's workflows:
+
+- Run each job only when its part of the repo changes (`paths` / `paths-ignore`). Docs-only and
+  HANDOFF-only changes run nothing.
+- PR runs get `concurrency: { group: ${{ github.workflow }}-${{ github.ref }}, cancel-in-progress: true }`.
+- Slow jobs (Docker builds, e2e) run only on `main`, on a `full-ci` label, or by hand
+  (`workflow_dispatch`).
+- Skip with a job-level `if:` rather than a step that exits early: a skipped job costs nothing,
+  and every job that starts bills at least a minute.
+- Path-filtered jobs can't be required status checks. On the free plan private repos have no
+  branch protection, so this doesn't matter there.
+
+The PR check (`pr-links-issue.yml`) runs no checkout and finishes in seconds; it stays unfiltered.
+
+Also budget GitHub's GraphQL limit (5,000 points an hour plus a burst limit, shared by every
+session on the account): never run `board.sh list` or `sync` in a loop, and pace bulk board
+edits. `gh api rate_limit` can say there is quota left while calls are being rejected.
+
 ## Changing the standard
 
 Edit this skill (claude-config), not one repo's copy, then run `audit.sh` in each repo and
