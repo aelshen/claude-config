@@ -127,7 +127,8 @@ Private repos share the org's Actions minutes; in October 2026 three repos used 
   branch protection, so this doesn't matter there.
 
 The PR check (`pr-links-issue.yml`) has no checkout and runs only when the PR body or labels
-change, not on every push.
+change, not on every push; a job-level `if:` skips edits that leave the body alone and labels
+other than `no-issue`.
 
 Also budget GitHub's GraphQL limit (5,000 points an hour plus a burst limit, shared by every
 session on the account): never run `board.sh list` or `sync` in a loop, and pace bulk board

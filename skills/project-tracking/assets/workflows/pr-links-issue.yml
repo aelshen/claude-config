@@ -15,6 +15,12 @@ permissions: {}
 
 jobs:
   links-issue:
+    # Skip events that can't change the result (each run bills a minute): edits that
+    # leave the body alone, and labels other than no-issue.
+    if: >-
+      (github.event.action != 'edited' || github.event.changes.body) &&
+      ((github.event.action != 'labeled' && github.event.action != 'unlabeled') ||
+       github.event.label.name == 'no-issue')
     runs-on: ubuntu-latest
     steps:
       - name: Check the PR body for an issue reference
