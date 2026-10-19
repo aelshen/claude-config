@@ -1,6 +1,6 @@
 # Brief: Delphi adopts the observability standard
 
-**For:** the Delphi session (repo `~/Work/delphi`, `aelshen/delphi-trx`). **From:** the Delphi session, 2026-10-19,
+**For:** the Delphi session (repo `~/Work/delphi`, `Side-Quest-Nexus/delphi-trx`). **From:** the Delphi session, 2026-10-19,
 at the owner's request via the arabayya session. **Read SKILL.md and `references/python.md` first.** Copy from
 arabayya `server/telemetry.py` (`setup`, `carry`, `model_call`, `record_usage`) and its tests.
 
