@@ -204,6 +204,10 @@ Claude: "I'll use ultrathink-debugger to investigate this edge case"
 
 Track work the same way in every repo, following the `project-tracking` skill: every PR names an issue (`Closes #N`; unplanned ops/infra work gets a short `type:chore` issue first), cards move Backlog → Ready → In progress → In review → Done, and Priority is the board's P0–P3 field. In a repo with `.github/board.env`, run `scripts/board.sh sync` at the start of a session. Change the standard in the skill, never in one repo's copy.
 
+## Secrets (all repos)
+
+Keep API keys and other secrets in Infisical, following the `secrets` skill: one Infisical project per repo (`dev` and `prod`), apps read plain environment variables (`infisical run` locally, a Keychain-held machine identity for scheduled jobs on the Mac, `infisical export` to a root-only env file on the VPS), and `.env` keeps non-secret settings only. Never print a secret value or ask the owner to paste one into the chat; move values with `infisical secrets set NAME=@file` and check them by fingerprint. Change the standard in the skill, never in one repo's copy.
+
 ## Observability (all services)
 
 Log, trace and report errors the same way in every service, following the `observability` skill: OpenTelemetry is the interface (one telemetry module per service, the only place that imports the OTel SDK), log lines are JSON on stdout with `trace_id`, every request gets a trace and an `X-Trace-Id` header, model calls are `chat <model>` spans with tokens and cost, and Sentry stays for crashes. Export is off by default; picking a vendor is setting `OTEL_EXPORTER_OTLP_ENDPOINT` (and its auth header), never a code change. Nothing from a children's service's kid surfaces leaves the host. Change the standard in the skill, never in one repo's copy.
