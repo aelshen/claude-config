@@ -13,7 +13,7 @@ Infisical projects exist for all four. Delete the default "Example Project" when
 
 - Project `arabayya` (`db860051-d60f-4554-a7dd-0ec72972b169`), `prod` and `dev`: OPENAI_API_KEY, ANTHROPIC_API_KEY,
   SUPABASE_SECRET_KEY, STORYWEAVER_PASSWORD, NTFY_TOPIC, SENTRY_DSN, APPLE_KEY_ID, APPLE_PRIVATE_KEY (one line,
-  `\\n` for newlines). `server/.env` keeps settings (SUPABASE_URL, STORYWEAVER_EMAIL, APPLE_TEAM_ID, APPLE_CLIENT_ID).
+  `\n` for newlines). `server/.env` keeps settings (SUPABASE_URL, STORYWEAVER_EMAIL, APPLE_TEAM_ID, APPLE_CLIENT_ID).
 - No machine identity yet (waiting for the VPS): the launchd API reads `server/.env.secrets` (mode 600, gitignored),
   written by `scripts/secrets-pull.sh` with the owner's login; it restarts the API. All three loaders read `.env`
   then `.env.secrets` with `setdefault`, so `infisical run` wins.
