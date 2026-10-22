@@ -9,16 +9,16 @@ Infisical projects exist for all four. Delete the default "Example Project" when
 - launchd jobs via `scripts/daily.sh` and identity `delphi-mac`. Hand runs: `infisical run -- delphi <cmd>`.
 - `.env` still has blank FINNHUB_API_KEY and FRED_API_KEY; set them in Infisical if they are ever used.
 
-## arabayya
+## arabayya (done, 2026-10-21, arabayya #436)
 
-- `server/.env` (FastAPI, `server/Dockerfile`; scripts load it with `library_store.load_env(args.env_file)`):
-  OPENAI_API_KEY, ANTHROPIC_API_KEY, SUPABASE_SECRET_KEY, SUPABASE_URL, STORYWEAVER_PASSWORD, SENTRY_DSN,
-  APPLE_KEY_ID, APPLE_PRIVATE_KEY (multi-line `.p8`: set with `@file`).
-- `app/.env` (Expo): EXPO_PUBLIC_* only (Supabase anon key and URL, API URL, Sentry DSN, PostHog key). Public build
-  config, read by EAS at build time; not part of this migration.
-- Check every `load_env(args.env_file)` caller: those scripts read a file explicitly, so under `infisical run` they
-  must not fail when the file lacks the keys (or should prefer the environment).
-- This repo is planning the VPS: the "On the VPS" section of SKILL.md is the secrets part of that plan.
+- Project `arabayya` (`db860051-d60f-4554-a7dd-0ec72972b169`), `prod` and `dev`: OPENAI_API_KEY, ANTHROPIC_API_KEY,
+  SUPABASE_SECRET_KEY, STORYWEAVER_PASSWORD, NTFY_TOPIC, SENTRY_DSN, APPLE_KEY_ID, APPLE_PRIVATE_KEY (one line,
+  `\\n` for newlines). `server/.env` keeps settings (SUPABASE_URL, STORYWEAVER_EMAIL, APPLE_TEAM_ID, APPLE_CLIENT_ID).
+- No machine identity yet (waiting for the VPS): the launchd API reads `server/.env.secrets` (mode 600, gitignored),
+  written by `scripts/secrets-pull.sh` with the owner's login; it restarts the API. All three loaders read `.env`
+  then `.env.secrets` with `setdefault`, so `infisical run` wins.
+- Not moved: `app/.env` (public EXPO_PUBLIC_*), the ASC `.p8` (EAS reads a path), the Sentry auth token (NAS).
+- At the VPS: the VPS identity as Viewer, `infisical export` in the deploy; drop `.env.secrets` and the pull script.
 
 ## playpatch (children's service)
 
