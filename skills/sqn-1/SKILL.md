@@ -68,6 +68,16 @@ and resize the server (CAX31, 16 GB) before the total of the limits passes ~7 GB
    jobs that write to shared services (Supabase, storage, push notifications) run twice. Check before starting the
    server copy.
 
+9. **The switch** (arabayya's took about 2 minutes of downtime): `launchctl bootout` the Mac's app and tunnel jobs,
+   stop the server's app, copy the data again (now final), start the app and `--profile tunnel` on the server, and
+   check `cloudflared tunnel info <name>`: the only connector should be `linux_arm64` from 46.225.189.46. Then
+   **move the Mac's old plists out of `~/Library/LaunchAgents`** (arabayya uses `~/Library/LaunchAgents-disabled/`),
+   or they start again at the next login and split production traffic.
+10. **Keep the Mac as dev.** Give it its own tunnel and hostname (`<app>-dev.sidequest.nexus`):
+    `cloudflared tunnel --origincert ~/.cloudflared/cert-personal.pem create <app>-dev`, then `route dns`, a config
+    file, and a launchd job. Point local dev (Expo's `app/.env`) at it, and keep builds on production. Turn off the
+    dev copy's scheduled jobs that cost money or write to shared services.
+
 ## Traps met so far
 
 - **Hetzner, Oct 2026:** prices rose sharply. The US locations and cost-optimized x86 were sold out or about 2×.
@@ -84,3 +94,8 @@ and resize the server (CAX31, 16 GB) before the total of the limits passes ~7 GB
   `POST /v1/auth/universal-auth/identities/<id>/client-secrets`. The secret was piped straight into the root-only
   file, never printed. A new project gets the identity the same way (the membership call only).
 - In zsh, `for n in $N` doesn't split a string variable; use `${=N}` (or bash).
+- `~/.cloudflared/` had a `cert.pem` for the old kuudoh Cloudflare account, so `tunnel list` showed none of the real
+  tunnels and `tunnel login` refused to overwrite it. Now there are two logins, `cert-personal.pem` (sidequest.nexus,
+  every tunnel) and `cert-kuudoh.pem`, and no `cert.pem`: pass `--origincert` to each command.
+- A merged cost log: arabayya's `usage.jsonl` on the server had a few lines from testing before the switch, so the
+  final copy put the Mac's log first and appended those, rather than overwriting.
