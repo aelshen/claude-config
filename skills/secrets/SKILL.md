@@ -35,7 +35,7 @@ Project ids: `infisical sm projects list`. Environments: `infisical sm projects 
 |---|---|---|---|
 | the owner | user | admin | `infisical run` in dev, adding and rotating keys |
 | `delphi-mac` | machine (Universal Auth) | Viewer on `delphi` | launchd jobs on the owner's Mac |
-| one VPS identity (to create) | machine (Universal Auth) | Viewer on every project | deploys on the VPS |
+| `sqn-1` | machine (Universal Auth), org role "No access" | Viewer on `arabayya`, `checkpoint`, `playpatch` | deploys on the VPS (`/etc/infisical/vps.env`; the `sqn-1` skill) |
 
 **One machine identity per machine, never one per app.** Four app identities plus the owner would use all 5 seats.
 A second project that needs unattended jobs on the Mac gets `delphi-mac` added to it as Viewer (rename it to
