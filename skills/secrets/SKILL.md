@@ -62,7 +62,8 @@ why 1Password stays the backup.
 
 These keep key values out of transcripts, which are stored.
 
-1. **Never print a value.** No `cat .env`, no `--plain` or `--show-values` to the screen, no `echo $KEY`, no
+1. **Never print a value.** Listing names with `sed 's/=.*//'` over `infisical export --format=dotenv` is NOT safe when a value spans lines (a service-account JSON key): only its first line is cut, the rest prints. List names with `infisical export --format=json | python3 -c 'import json,sys; print([r["key"] for r in json.load(sys.stdin)])'` (checkpoint leaked and rotated a key this way, 2026-10-22).
+   Also: No `cat .env`, no `--plain` or `--show-values` to the screen, no `echo $KEY`, no
    `env`/`printenv` dumps. Print names, counts and lengths only (`${#v} chars`).
 2. **Never ask the owner to paste a key into the chat.** They put it in a file (or the clipboard) and tell you the
    name; you move it with the CLI.

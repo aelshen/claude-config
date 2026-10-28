@@ -28,3 +28,11 @@ Things that went wrong or right in practice. Add to this when a run teaches some
 - **Some differences that look like duplication are deliberate,** for example regex character
   ranges that differ for parity with another component. A finder should flag them as "check before
   merging", not "merge".
+
+## 2026-10-13: whole-repo review of a 26k-line Python (FastAPI, SQLite) + Expo app
+
+- **Six finders, one per slice (answer path, semantic layer, ingest pipeline, server, app Studio, app chat).** They took 3–10 minutes each. The slice holding the transactional core (change ledger) was slowest and the most valuable: it ran mutation checks on a repo copy and found untested guards whose mutants survived the full suite.
+- **32 behaviour claims went to verifiers: 31 confirmed, 1 refuted.** Briefs that demanded executable proof (repro scripts on in-memory dbs or temp copies) produced claims that held up.
+- **A finder's probe wrote into the real data dir.** It used a FastAPI TestClient against a test fixture, and a background job thread outlived the fixture's monkeypatched data dir. Add to every brief: "probes must not start background jobs or threads, or must join them before the fixture exits; run executable checks inside a `cp -cR` copy of the repo."
+- **Point the sweep at the real source dirs.** Run from the repo root it also scanned 24 stale `.claude/worktrees/` copies, which multiplied ruff and vulture output by 25. Pass `checkpoint tests` explicitly, or exclude `.claude/`.
+- **No uvx or pipx on the machine:** a throwaway venv in the scratchpad (`python3 -m venv; pip install ruff vulture radon`) kept the project untouched.

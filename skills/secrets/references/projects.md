@@ -35,12 +35,18 @@ Infisical projects exist for all four. Delete the default "Example Project" when
   and Infisical's free tier keeps no history.
 - GEMINI_VERTEX_CREDENTIALS / _KEY_DIR point at a service-account file: store the JSON as one secret (`@file`) and
   have the deploy write it to the path the app expects.
+- Environments (2026-10-23): `prod` is the owner's own instance (play.sidequest.nexus, on the Mac); the unused
+  `staging` was renamed `hosted` (slug `hosted`) for the paid hosted service on sqn-1. Hosted keys (live Stripe
+  restricted key `STRIPE_SECRET_KEY`, its own `DATA_ENCRYPTION_KEY`, etc.) go there, never in `prod`.
 - `NEXT_PUBLIC_*` values must be present at `next build`.
 
 ## checkpoint
 
-- Root `.env` (gitignored): OPENAI_API_KEY, ANTHROPIC_API_KEY, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY,
-  SUPABASE_ACCESS_TOKEN (listed twice; keep one), CLOUDFLARE_API_TOKEN, RESEND_API_KEY, SENTRY_DSN,
-  CHECKPOINT_GEMINI_API_KEY.
-- Python (`pyproject.toml`) with `spend.jsonl`; check how it loads `.env` and how it is started before wiring
-  `infisical run`.
+Adopted 2026-10-21 (#463, PR #464), the same way as arabayya: no machine identity yet.
+- Infisical project `checkpoint` (dev and prod): ANTHROPIC_API_KEY, OPENAI_API_KEY, RESEND_API_KEY (send-only),
+  SENTRY_DSN, CLOUDFLARE_API_TOKEN, CLOUDFLARE_TUNNEL_TOKEN (backup of ~/.cloudflared/checkpoint.token),
+  CHECKPOINT_GEMINI_API_KEY (unusable: Gemini runs on gcloud ADC).
+- `scripts/secrets-pull.sh` exports prod into a mode-600 `.env.secrets`, then restarts the API. `llm.load_env` reads
+  `.env.secrets` before `.env`, and both lose to the process env. The plists are unchanged. Docs: `docs/SECRETS.md`.
+- `.env` holds settings only (SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY are public). Both old SUPABASE_ACCESS_TOKEN
+  lines returned 401 and were dropped.
