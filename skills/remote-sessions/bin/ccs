@@ -1,0 +1,16 @@
+#!/bin/bash
+# ccs <name> [dir] [claude args...]: open (or reattach) a Claude Code session in its own
+# tmux session, so the same session works in a Warp tab on the Mac and from the phone (cc).
+#   ccs checkpoint ~/Work/checkpoint -c    # -c: continue the last conversation there
+set -euo pipefail
+TMUX_BIN=/opt/homebrew/bin/tmux
+name=${1:?usage: ccs <name> [dir] [claude args...]}; dir=${2:-$PWD}; shift $(( $# >= 2 ? 2 : 1 ))
+if ! $TMUX_BIN has-session -t "=$name" 2>/dev/null; then
+  # Owner's default: skip permission prompts. Start one with prompts with CCS_PROMPTS=1 ccs ...
+  claude="$HOME/.local/bin/claude"; [ -z "${CCS_PROMPTS:-}" ] && claude="$claude --dangerously-skip-permissions"
+  # With -c and no earlier conversation in that folder, start a fresh one instead.
+  run="$claude $*"; [[ " $* " == *" -c "* ]] && run="$claude $* || $claude"
+  $TMUX_BIN new-session -d -s "$name" -c "$dir" "$run; exec \$SHELL"
+fi
+if [ -n "${TMUX:-}" ]; then exec $TMUX_BIN switch-client -t "=$name"; fi
+exec $TMUX_BIN attach-session -t "=$name"
