@@ -216,6 +216,10 @@ Services run on `sqn-1`, the shared Hetzner Arm server, following the `sqn-1` sk
 
 Log, trace and report errors the same way in every service, following the `observability` skill: OpenTelemetry is the interface (one telemetry module per service, the only place that imports the OTel SDK), log lines are JSON on stdout with `trace_id`, every request gets a trace and an `X-Trace-Id` header, model calls are `chat <model>` spans with tokens and cost, and Sentry stays for crashes. Export is off by default; picking a vendor is setting `OTEL_EXPORTER_OTLP_ENDPOINT` (and its auth header), never a code change. Nothing from a children's service's kid surfaces leaves the host. Change the standard in the skill, never in one repo's copy.
 
+## Remote sessions (Mac ↔ phone)
+
+Claude sessions on the Mac mini run in tmux, one session per project, so the owner can reach them from the iPhone, following the `remote-sessions` skill: `ccs <name> <dir> -c` opens or reattaches one (Warp tab on the Mac, Termius over Tailscale on the phone), and `preview <port|file>` prints a tailnet-only link for a dev server or mockup. When you start a server or produce something to look at, run `preview` and give the owner the link. Messaging between sessions works the same inside tmux. Record new traps in the skill.
+
 ## Communication Preferences
 
 - Be concise and direct

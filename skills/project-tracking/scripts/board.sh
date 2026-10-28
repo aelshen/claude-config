@@ -40,7 +40,7 @@ gh() { # pass-through; explain the error gh prints for a rate-limited `gh projec
   return "$rc"
 }
 
-root="$(git rev-parse --show-toplevel 2>/dev/null)" || die "not inside a git repo"
+root="$(git rev-parse --show-toplevel 2>/dev/null)" || { [ -n "${BOARD_ENV:-}" ] || die "not inside a git repo"; root=; }  # BOARD_ENV: run outside a repo (a server image)
 env_file="${BOARD_ENV:-$root/.github/board.env}"  # BOARD_ENV: audit a repo without writing into it
 [ -f "$env_file" ] || die "no $env_file (see the project-tracking skill)"
 # shellcheck disable=SC1091
