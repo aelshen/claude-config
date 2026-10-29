@@ -1,0 +1,31 @@
+# Claude sessions: one Warp tab per project, each a tmux session (ccs) the phone can open with cc.
+# Opening this again reattaches existing sessions; -c continues the last conversation if it was closed.
+---
+name: Claude sessions
+windows:
+  - tabs:
+      - title: work
+        layout:
+          cwd: /Users/ahmadelshenawy/Work
+          commands:
+            - exec: ccs work /Users/ahmadelshenawy/Work -c
+      - title: checkpoint
+        layout:
+          cwd: /Users/ahmadelshenawy/Work/checkpoint
+          commands:
+            - exec: ccs checkpoint /Users/ahmadelshenawy/Work/checkpoint -c
+      - title: arabayya
+        layout:
+          cwd: /Users/ahmadelshenawy/Work/arabayya
+          commands:
+            - exec: ccs arabayya /Users/ahmadelshenawy/Work/arabayya -c
+      - title: delphi
+        layout:
+          cwd: /Users/ahmadelshenawy/Work/delphi
+          commands:
+            - exec: ccs delphi /Users/ahmadelshenawy/Work/delphi -c
+      - title: playpatch
+        layout:
+          cwd: /Users/ahmadelshenawy/Work/playpatch
+          commands:
+            - exec: ccs playpatch /Users/ahmadelshenawy/Work/playpatch -c

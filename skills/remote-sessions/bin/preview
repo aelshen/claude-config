@@ -1,0 +1,25 @@
+#!/bin/bash
+# preview: show local things on your phone, privately over Tailscale (nothing is public).
+#   preview 5173            mirror localhost:5173  -> http://<mac>:5173/
+#   preview ~/x/mock.pdf    share that file's folder -> http://<mac>:8099/<folder>/mock.pdf
+#   preview list | off      what is shared | stop sharing everything
+set -euo pipefail
+TS=$(command -v tailscale || echo /Applications/Tailscale.app/Contents/MacOS/Tailscale)
+[ -x "$TS" ] || { echo "Tailscale isn't installed on this Mac yet."; exit 1; }
+host=$("$TS" status --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["Self"]["DNSName"].rstrip("."))')
+case "${1:-}" in
+  ""|-h|--help) sed -n '2,6p' "$0"; exit 0 ;;
+  list) "$TS" serve status; exit 0 ;;
+  off) "$TS" serve reset && echo "Stopped sharing."; exit 0 ;;
+esac
+if [[ $1 =~ ^[0-9]+$ ]]; then
+  "$TS" serve --bg --http="$1" "http://127.0.0.1:$1" >/dev/null
+  echo "http://$host:$1/"
+else
+  path=$(cd "$(dirname "$1")" && pwd)/$(basename "$1")
+  [ -e "$path" ] || { echo "No such file: $1"; exit 1; }
+  dir=$path; file=""; [ -f "$path" ] && { dir=$(dirname "$path"); file=$(basename "$path"); }
+  slug=$(basename "$dir" | tr -c 'A-Za-z0-9._-\n' '-')
+  "$TS" serve --bg --http=8099 --set-path "/$slug" "$dir" >/dev/null
+  echo "http://$host:8099/$slug/$(python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "$file")"
+fi
