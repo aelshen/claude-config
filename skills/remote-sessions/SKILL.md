@@ -74,3 +74,12 @@ share the folder). The conversation comes back; instruction files are re-read on
   (macOS creates the host keys then).
 - **Claude Code isn't on PATH for non-interactive SSH** unless `~/.zshenv` sets it; `ccs` calls
   `~/.local/bin/claude` directly.
+- **`preview <port>` shows a dead link for `expo start --localhost`**: Expo listens on IPv6 `[::1]` only, while
+  `preview` proxies to `127.0.0.1`. Check with `lsof -nP -iTCP:<port> -sTCP:LISTEN`; if it says `[::1]`, run
+  `tailscale serve --bg --http=<port> "http://[::1]:<port>"` instead. The tailnet link stays the same.
+- **Scrolling on the phone:** Claude Code's fullscreen mode (alternate screen + mouse capture) keeps scrolling
+  to itself, and Termius swipes don't drive it well. `ccs` starts sessions with
+  `CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1` (classic renderer), so output lands in tmux history and a swipe or
+  the wheel scrolls it. Sessions started before this change keep fullscreen until reopened with `ccs`.
+- **Option-Delete (delete word) didn't work in tmux:** Warp sends it in the extended key format, which tmux
+  dropped. `tmux.conf` sets `extended-keys on` and `terminal-features 'xterm*:extkeys'`. Ctrl-W always works.

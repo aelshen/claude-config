@@ -10,7 +10,9 @@ if ! $TMUX_BIN has-session -t "=$name" 2>/dev/null; then
   claude="$HOME/.local/bin/claude"; [ -z "${CCS_PROMPTS:-}" ] && claude="$claude --dangerously-skip-permissions"
   # With -c and no earlier conversation in that folder, start a fresh one instead.
   run="$claude $*"; [[ " $* " == *" -c "* ]] && run="$claude $* || $claude"
-  $TMUX_BIN new-session -d -s "$name" -c "$dir" "$run; exec \$SHELL"
+  # Classic renderer inside tmux: output goes to tmux history, so phone swipes / the wheel scroll it
+  # (Claude's fullscreen mode keeps scrolling to itself). Claude outside tmux keeps fullscreen.
+  $TMUX_BIN new-session -d -s "$name" -c "$dir" -e CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1 "$run; exec \$SHELL"
 fi
 if [ -n "${TMUX:-}" ]; then exec $TMUX_BIN switch-client -t "=$name"; fi
 exec $TMUX_BIN attach-session -t "=$name"
