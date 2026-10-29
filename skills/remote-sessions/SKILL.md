@@ -81,5 +81,7 @@ share the folder). The conversation comes back; instruction files are re-read on
   to itself, and Termius swipes don't drive it well. `ccs` starts sessions with
   `CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1` (classic renderer), so output lands in tmux history and a swipe or
   the wheel scrolls it. Sessions started before this change keep fullscreen until reopened with `ccs`.
-- **Option-Delete (delete word) didn't work in tmux:** Warp sends it in the extended key format, which tmux
-  dropped. `tmux.conf` sets `extended-keys on` and `terminal-features 'xterm*:extkeys'`. Ctrl-W always works.
+- **Option-Delete (delete word) doesn't work in tmux by default:** Warp sends it as a plain Delete
+  unless the app switches on Warp's extended keyboard mode, which Claude does outside tmux but can't through
+  tmux. Fix in Warp: Settings → Features → Keys → "Left Option key is Meta" (right Option still types
+  special characters). tmux extended-keys did not help. Ctrl-W always works.
