@@ -19,7 +19,8 @@ runs="$state/runs.tsv" marks="$state/marks.tsv"
 [ -f "$runs" ] || printf 'date\trepo\tbranch\tpr\tround\tsecs\tfindings\tp1\toutput\n' >"$runs"
 [ -f "$marks" ] || printf 'date\trepo\tpr\treal\tnoise\tnote\n' >"$marks"
 
-repo_name() { basename "$(git rev-parse --show-toplevel)"; }
+# the origin's repo name, not the checkout's folder (a worktree is named after its branch)
+repo_name() { local u; u=$(git remote get-url origin 2>/dev/null) || u=$(git rev-parse --show-toplevel); u="${u%.git}"; echo "${u##*[/:]}"; }
 
 report() {
   local days="${1:-3650}" since
