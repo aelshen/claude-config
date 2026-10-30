@@ -59,3 +59,7 @@ Cost: the CLI runs on the ChatGPT plan login; check usage with `/status` in `cod
 - Codex's sandbox has no sockets: server-starting tests fail there (the shared guidance says so).
 - Docs-only PRs may run only the links check: "pending" means a check is running, not that one is missing.
 - A log file inside the repo dirties the tree and the next run refuses: state lives outside.
+- The merge guard reads the command before it runs: `gh pr merge $PR` (a shell variable) is blocked as unreadable, and
+  a `gh pr edit` that adds the section in the same command hasn't happened yet. Edit the body in one command, then
+  merge with a literal PR number in the next.
+- In a checkout another session also uses, never `git commit -a`: it sweeps their uncommitted edits into your PR.
