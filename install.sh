@@ -23,8 +23,9 @@ for f in "$repo"/agents/*.md; do link "agents/$(basename "$f")" "$dest/agents/$(
 for d in "$repo"/skills/*/; do n=$(basename "$d"); link "skills/$n" "$dest/skills/$n"; done
 # Codex's global guidance (codex-review skill), unless you keep your own file there.
 codex_md="$HOME/.codex/AGENTS.md" codex_src="$repo/skills/codex-review/assets/codex-AGENTS.md"
-if [ -L "$codex_md" ] || [ ! -e "$codex_md" ]; then
-  mkdir -p "$HOME/.codex"; [ "$(readlink "$codex_md" 2>/dev/null)" = "$codex_src" ] || { ln -sfn "$codex_src" "$codex_md"; echo "linked $codex_md"; }
+if [ "$(readlink "$codex_md" 2>/dev/null)" = "$codex_src" ]; then :
+elif [ ! -e "$codex_md" ] && [ ! -L "$codex_md" ]; then
+  mkdir -p "$HOME/.codex"; ln -s "$codex_src" "$codex_md"; echo "linked $codex_md"
 else
   echo "kept your $codex_md (not a link); merge skills/codex-review/assets/codex-AGENTS.md into it by hand"
 fi
