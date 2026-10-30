@@ -14,6 +14,12 @@ against a collector:
   PlayPatch is an owner-approved exception (2026-10-30): it keeps 25% of web transactions in
   Sentry, chosen by a hash of the trace id in `beforeSendTransaction`. Don't copy that
   without the owner's say-so.
+- **Sampling later:** with Sentry owning the provider, `OTEL_TRACES_SAMPLER` /
+  `OTEL_TRACES_SAMPLER_ARG` are ignored. Lower `tracesSampleRate` (or use `tracesSampler`)
+  instead; it samples what OTLP exports, and Sentry gets nothing either way while
+  transactions are dropped. Unsampled requests still get a valid trace id, so log lines and
+  `X-Trace-Id` keep working; only their spans aren't recorded. If OTel sampling must differ
+  from Sentry's (e.g. a Sentry share as in PlayPatch), use option B.
 - **Sentry's resource pins `service.version` to its SDK version.** Override it in your export
   wrapper (`span.resource.merge(...)`). It does honour `OTEL_SERVICE_NAME` and
   `OTEL_RESOURCE_ATTRIBUTES`.
