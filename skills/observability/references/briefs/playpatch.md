@@ -1,5 +1,10 @@
 # Brief: PlayPatch adopts the observability standard
 
+> **Done 2026-10-30** (Side-Quest-Nexus/playpatch #159 to #162). What was built, and what
+> differs from this brief, is in `../node.md`. The Sentry question in step 2 was settled as
+> `tracesSampleRate: 1` with `beforeSendTransaction` keeping 25% (owner-approved exception):
+> a rate below 1 would also sample away the OTLP spans. Kept below as the original brief.
+
 **For:** the PlayPatch session (repo `~/Work/playpatch/playpatch`). **From:** the owner's
 arabayya session, 2026-10-18. Open a PlayPatch issue for this first (project-tracking rule).
 
