@@ -4,7 +4,7 @@
 # at the house review rules). Findings are leads: verify each, fix it or say in the PR why not.
 #
 #   codex-review.sh [base]                    review this branch (base: origin/main); logs the run
-#   codex-review.sh mark <pr> <real> <noise> [note]   record what the findings turned out to be
+#   codex-review.sh mark [-R owner/repo] <pr> <real> <noise> [note]   record what the findings turned out to be
 #   codex-review.sh report [days]             per repo: PRs, rounds, findings, real, noise, time
 #
 # Per-repo config, .github/codex-review.env (no file = review everything):
@@ -39,10 +39,13 @@ report() {
 
 case "${1:-}" in
   report) shift; report "$@"; exit ;;
-  mark)
-    [ $# -ge 4 ] || { echo "usage: $0 mark <pr> <real> <noise> [note]" >&2; exit 2; }
-    printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$(date '+%Y-%m-%d')" "$(repo_name)" "$2" "$3" "$4" "${5:-}" >>"$marks"
-    echo "marked $(repo_name) #$2: $3 real, $4 noise"; exit ;;
+  mark)  # mark [-R owner/repo] <pr> <real> <noise> [note]: -R when the PR is in another repo than this checkout
+    shift; name=""
+    if [ "${1:-}" = -R ]; then name="${2##*/}"; shift 2; fi
+    [ $# -ge 3 ] || { echo "usage: $0 mark [-R owner/repo] <pr> <real> <noise> [note]" >&2; exit 2; }
+    name="${name:-$(repo_name)}"
+    printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$(date '+%Y-%m-%d')" "$name" "$1" "$2" "$3" "${4:-}" >>"$marks"
+    echo "marked $name #$1: $2 real, $3 noise"; exit ;;
   -h|--help|help) sed -n '2,16p' "$0"; exit ;;
 esac
 
