@@ -67,5 +67,8 @@ service:
 ```
 
 The kid-route list must match the service's own list (playpatch `kid-surface.ts`). The
+sketch above is out of date for playpatch: use its `infrastructure/otel/collector.yaml`, which
+has the full list, a span-name rule, the worker-queue rule, and a test that keeps them in step.
+`IsMatch` on a missing attribute is false, so guard `not IsMatch(...)` rules with `!= nil`. The
 service drops those spans itself too; the collector filter is the second lock. To compare
 two vendors, add a second exporter to the pipelines; to switch, change the env values.
