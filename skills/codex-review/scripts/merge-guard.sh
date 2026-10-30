@@ -51,7 +51,8 @@ if [ $code -eq 8 ]; then
   exit 2
 fi
 if grep -q "no checks reported" <<<"$checks"; then
-  echo "Blocked: no CI checks are registered on PR $pr yet (right after a push they take a moment). Wait and re-check; for a repo with no CI, prefix the merge with CODEX_GUARD=off." >&2
+  grep -qE '^CODEX_REQUIRE_CI="?0' <<<"$conf" && exit 0  # a repo with no CI says so in its config
+  echo "Blocked: no CI checks are registered on PR $pr yet (right after a push they take a moment). Wait and re-check; a repo with no CI sets CODEX_REQUIRE_CI=0 in .github/codex-review.env." >&2
   exit 2
 fi
 if [ $code -ne 0 ]; then

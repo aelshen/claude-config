@@ -28,7 +28,7 @@ calls.
 6. Merge only after CI has finished. The merge guard (`scripts/merge-guard.sh`, a PreToolUse hook) refuses
    `gh pr merge` in a configured repo while a check is pending, before any check is registered (right after a push
    `gh pr checks --watch` returns at once), on failed checks, or without the section. `CODEX_GUARD=off gh pr merge ...`
-   overrides it for one command (a repo with no CI).
+   overrides it for one command.
 
 ## Setting a repo up
 
@@ -38,6 +38,7 @@ calls.
   CODEX_SCOPE=all            # all | risky | off
   CODEX_PATHS=""             # risky: review only when a changed file matches (bash patterns, * matches /)
   CODEX_EXCLUDE="tests/golden/* app/src/i18n/*"   # changes only here never trigger a review
+  CODEX_REQUIRE_CI=1         # 0 for a repo with no CI, so the merge guard doesn't wait for checks
   ```
 - The repo's AGENTS.md says where its review rules are (REVIEW.md, deliberate patterns). Codex reads it; shared
   guidance is `~/.codex/AGENTS.md` (from `assets/codex-AGENTS.md`).
