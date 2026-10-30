@@ -21,11 +21,22 @@ link CLAUDE.md "$dest/CLAUDE.md"
 link budget "$dest/budget"
 for f in "$repo"/agents/*.md; do link "agents/$(basename "$f")" "$dest/agents/$(basename "$f")"; done
 for d in "$repo"/skills/*/; do n=$(basename "$d"); link "skills/$n" "$dest/skills/$n"; done
+# Codex's global guidance (codex-review skill), unless you keep your own file there.
+codex_md="$HOME/.codex/AGENTS.md" codex_src="$repo/skills/codex-review/assets/codex-AGENTS.md"
+if [ "$(readlink "$codex_md" 2>/dev/null)" = "$codex_src" ]; then :
+elif [ ! -e "$codex_md" ] && [ ! -L "$codex_md" ]; then
+  mkdir -p "$HOME/.codex"; ln -s "$codex_src" "$codex_md"; echo "linked $codex_md"
+else
+  echo "kept your $codex_md (not a link); merge skills/codex-review/assets/codex-AGENTS.md into it by hand"
+fi
 
 # Settings are merged, not linked: your machine-specific keys stay put.
-# Hook arrays are replaced for the events this repo defines.
+# Hook arrays are combined: your own hooks (e.g. a local Bash guard) stay, this repo's are added once.
 settings="$dest/settings.json"
 [ -f "$settings" ] || echo '{}' > "$settings"
 mkdir -p "$backup"; cp "$settings" "$backup/settings.json"
-jq -s '.[0] * .[1]' "$settings" "$repo/settings.json" > "$settings.new" && mv "$settings.new" "$settings"
+jq -s '.[0] as $l | .[1] as $r | ($l * $r)
+  | .hooks = (reduce ((($l.hooks // {}) | keys) + (($r.hooks // {}) | keys) | unique)[] as $e ({};
+      .[$e] = ((($l.hooks[$e] // []) + ($r.hooks[$e] // [])) | reduce .[] as $x ([]; if index([$x]) then . else . + [$x] end))))' \
+  "$settings" "$repo/settings.json" > "$settings.new" && mv "$settings.new" "$settings"
 echo "merged settings.json (backup in $backup)"

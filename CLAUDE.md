@@ -204,6 +204,10 @@ Claude: "I'll use ultrathink-debugger to investigate this edge case"
 
 Track work the same way in every repo, following the `project-tracking` skill: every PR names an issue (`Closes #N`; unplanned ops/infra work gets a short `type:chore` issue first), cards move Backlog → Ready → In progress → In review → Done, and Priority is the board's P0–P3 field. In a repo with `.github/board.env`, run `scripts/board.sh sync` at the start of a session. Change the standard in the skill, never in one repo's copy.
 
+## Peer review (all repos)
+
+Every PR gets a Codex review before merge, following the `codex-review` skill: `scripts/codex-review.sh` on the pushed branch (committed changes only; scope per repo in `.github/codex-review.env`), each finding verified against the code, a test or the data before acting, at most two rounds (a third only to check a P1 fix), a `## Codex review` section in the PR (found, fixed, declined and why), `codex-review.sh mark` once it settles, and merge only after CI has finished (the merge guard hook enforces both). It adds to tests and data measurements, never replaces them. Change the standard in the skill, never in one repo's copy.
+
 ## Secrets (all repos)
 
 Keep API keys and other secrets in Infisical, following the `secrets` skill: one Infisical project per repo (`dev` and `prod`), apps read plain environment variables (`infisical run` locally, a Keychain-held machine identity for scheduled jobs on the Mac, `infisical export` to a root-only env file on the VPS), and `.env` keeps non-secret settings only. Never print a secret value or ask the owner to paste one into the chat; move values with `infisical secrets set NAME=@file` and check them by fingerprint. Change the standard in the skill, never in one repo's copy.
