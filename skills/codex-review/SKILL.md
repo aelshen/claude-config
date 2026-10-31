@@ -45,7 +45,7 @@ calls.
 - A repo whose code may not go to OpenAI is `CODEX_SCOPE=off` until the owner says otherwise.
 
 Per repo (owner, 2026-10-30): playpatch `all`, checkpoint `all`, arabayya and delphi `risky` (paths in their env
-files), kuudoh `off` pending the owner's OK to send its source to OpenAI.
+files), kuudoh `all` (owner OK, 2026-10-31).
 
 ## Measuring
 
