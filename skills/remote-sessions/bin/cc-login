@@ -1,0 +1,14 @@
+#!/bin/bash
+# Login for the phone's SSH key (see ~/.ssh/authorized_keys and the remote-sessions skill): a plain login goes straight
+# into the hub tmux session; a command the app sends itself (e.g. mosh-server) runs as usual.
+export PATH="/opt/homebrew/bin:$HOME/.local/bin:$PATH"
+cmd=${SSH_ORIGINAL_COMMAND:-}
+while [[ $cmd == *[[:space:]] ]]; do cmd=${cmd%?}; done  # Termius ends commands with a newline
+# mosh starts a plain shell unless told what to run: open the hub instead.
+if [[ $cmd == "mosh-server new"* && $cmd != *" -- "* ]]; then
+  cmd="$cmd -- $HOME/.local/bin/cc"
+fi
+if [ -n "$cmd" ]; then
+  exec /bin/zsh -c "$cmd"
+fi
+exec "$HOME/.local/bin/cc"
