@@ -55,13 +55,22 @@ ISSUE_REPO="${BOARD_ISSUE_REPO:-$BOARD_REPO}"
 
 cache="${XDG_CACHE_HOME:-$HOME/.cache}/project-tracking/${BOARD_OWNER}-${BOARD_PROJECT}.tsv"
 
-refresh() { # project id + every single-select field's options, one TSV line each
+refresh() { # project id + every single-select field's options, one TSV line each. One narrow query, not
+  # `gh project view`/`field-list`: those also read every card's linked PRs, so a token that can't see one PR (a
+  # fine-grained or other-repo token, e.g. on a server) fails them outright and the cache is never written.
   mkdir -p "$(dirname "$cache")"
-  {
-    printf '__project\t%s\t\t\n' "$(gh project view "$BOARD_PROJECT" --owner "$BOARD_OWNER" --format json --jq .id)"
-    gh project field-list "$BOARD_PROJECT" --owner "$BOARD_OWNER" --format json \
-      --jq '.fields[] | select(.options) | .name as $f | .id as $fid | .options[] | [$f, $fid, .name, .id] | @tsv'
-  } > "$cache.tmp" && mv "$cache.tmp" "$cache"
+  local kind q
+  for kind in organization user; do  # the project's owner is an org or a user; the wrong one is an error
+    q="query(\$o:String!,\$n:Int!){$kind(login:\$o){projectV2(number:\$n){id fields(first:100){nodes{... on ProjectV2SingleSelectField{id name options{id name}}}}}}}"
+    if gh api graphql -f query="$q" -f o="$BOARD_OWNER" -F n="$BOARD_PROJECT" --jq ".data.$kind.projectV2 |
+        (\"__project\\t\" + .id + \"\\t\\t\"), (.fields.nodes[] | select(.options) | .name as \$f | .id as \$fid | .options[] | [\$f, \$fid, .name, .id] | @tsv)" \
+        > "$cache.tmp" 2>/dev/null && [ -s "$cache.tmp" ]; then
+      mv "$cache.tmp" "$cache"
+      return 0
+    fi
+  done
+  rm -f "$cache.tmp"
+  die "can't read project $BOARD_PROJECT of $BOARD_OWNER (token scope, or the number is wrong)"
 }
 
 lookup() { # field name, option name -> "fieldId<TAB>optionId" (empty if unknown)
