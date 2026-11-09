@@ -26,6 +26,6 @@ windows:
             - exec: ccs delphi /Users/ahmadelshenawy/Work/delphi -c
       - title: playpatch
         layout:
-          cwd: /Users/ahmadelshenawy/Work/playpatch
+          cwd: /Users/ahmadelshenawy/Work/playpatch/playpatch
           commands:
-            - exec: ccs playpatch /Users/ahmadelshenawy/Work/playpatch -c
+            - exec: ccs playpatch /Users/ahmadelshenawy/Work/playpatch/playpatch -c
