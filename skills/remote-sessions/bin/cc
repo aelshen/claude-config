@@ -1,0 +1,5 @@
+#!/bin/bash
+# cc: from the phone, pick one of the running Claude sessions (opened with ccs on the Mac).
+TMUX_BIN=/opt/homebrew/bin/tmux
+$TMUX_BIN has-session 2>/dev/null || $TMUX_BIN new-session -d -s shell
+exec $TMUX_BIN attach-session \; choose-tree -Zs
