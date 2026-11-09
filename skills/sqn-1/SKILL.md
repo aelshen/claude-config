@@ -78,6 +78,28 @@ and resize the server (CAX31, 16 GB) before the total of the limits passes ~7 GB
     file, and a launchd job. Point local dev (Expo's `app/.env`) at it, and keep builds on production. Turn off the
     dev copy's scheduled jobs that cost money or write to shared services.
 
+## Images: built by GitHub Actions, pulled by the server (checkpoint #496, the standard)
+
+The server never builds. Checkpoint is the reference (`.github/workflows/image.yml`, `scripts/vps-deploy.sh`,
+`scripts/vps-remote.sh`); arabayya still builds on the server and should move to this.
+
+- **Build:** on merge to main, a workflow runs the tests (the CI workflow made reusable with `workflow_call`), then
+  `docker/build-push-action` builds for `linux/arm64` on **`runs-on: ubuntu-24.04-arm`** (native Arm; works on the
+  org's free plan for private repos, about 3.5 min cold) and pushes `ghcr.io/side-quest-nexus/<app>:<commit>` and
+  `:main` with `GITHUB_TOKEN` (`permissions: packages: write`) and `cache-from/to: type=gha`.
+- **Pick:** the Mac's deploy script takes the newest run of that workflow on main (`gh run list --workflow image.yml
+  --branch main --limit 1`), waits for it if running, stops if it failed. A docs-only commit has no run, and the newest
+  image is still main's.
+- **Pull:** in the root deploy script, log in with a classic token from Infisical (`GHCR_PULL_TOKEN`, only
+  `read:packages`) into a throwaway `DOCKER_CONFIG` inside the deploy's temp dir, `docker pull`, `docker logout`, so no
+  registry login stays on disk. Keep the token out of the container's env file.
+- **Run:** tag the running image `<app>-api:previous`, tag the pulled one `<app>-api:latest` (the name compose and the
+  jobs use), `up -d --no-build`, health check, roll back to `:previous` on failure, then `docker rmi` the pulled ghcr
+  tags (the layers stay under the local tags) and `docker image prune -f`.
+- The code checkout is still pushed from the Mac, for the compose file, job scripts and systemd units only.
+- **Pin dependencies** (a lock file the Mac, CI and the Dockerfile all install from). Unpinned, CI, the server and the
+  Mac ran three different FastAPI versions (checkpoint #494).
+
 ## Traps met so far
 
 - **Hetzner, Oct 2026:** prices rose sharply. The US locations and cost-optimized x86 were sold out or about 2×.
@@ -93,9 +115,38 @@ and resize the server (CAX31, 16 GB) before the total of the limits passes ~7 GB
   `POST /v2/workspace/<project>/identity-memberships/<id>` `{"role":"viewer"}`,
   `POST /v1/auth/universal-auth/identities/<id>/client-secrets`. The secret was piped straight into the root-only
   file, never printed. A new project gets the identity the same way (the membership call only).
+- **GHCR needs a classic token to pull.** Fine-grained tokens can't read container packages. Make one with only
+  `read:packages` (Settings → Developer settings → Tokens (classic)), store it in the app's Infisical prod. Check its
+  scopes without printing it: the `x-oauth-scopes` response header of any `api.github.com` call.
+- **GitHub Actions stops silently when the org's budget is hit:** jobs fail with 0 steps and the annotation "recent
+  account payments have failed or your spending limit needs to be increased". The fix is the org's Billing and
+  licensing → Budgets and alerts (the Actions budget defaults to $0 on the free plan). Seen 2026-10.
 - In zsh, `for n in $N` doesn't split a string variable; use `${=N}` (or bash).
 - `~/.cloudflared/` had a `cert.pem` for the old kuudoh Cloudflare account, so `tunnel list` showed none of the real
   tunnels and `tunnel login` refused to overwrite it. Now there are two logins, `cert-personal.pem` (sidequest.nexus,
   every tunnel) and `cert-kuudoh.pem`, and no `cert.pem`: pass `--origincert` to each command.
 - A merged cost log: arabayya's `usage.jsonl` on the server had a few lines from testing before the switch, so the
   final copy put the Mac's log first and appended those, rather than overwriting.
+- **Checkpoint cutover (2026-10-23):** copy SQLite data through the app's own backup and restore (`checkpoint backup --local`,
+  then `restore --to` in the image as uid 1000) rather than file copies: it is consistent and integrity-checked. Copy
+  caches that hold paid model output separately (backups skip them).
+- Don't `chown` an rsync **target** to the container uid between runs: the next `rsync` as `claude` fails with
+  `mkstemp ... Permission denied`. Make it world-readable (`chmod -R a+rX`) instead, and chown only the data dir.
+- After moving a tunnel's connector, the **first** public request can hang ~1 minute while Cloudflare drops the old
+  connector. Re-time before suspecting the server.
+- **Long silent jobs over ssh hang locally (2026-10-28):** a `ssh sqn-1 '... docker compose run ...'` that prints
+  nothing for many minutes (checkpoint's `scripts/sqn.sh junk`) finished on the server, but the Mac's ssh stayed
+  connected to a dead session and never returned. Run long jobs detached on the server
+  (`nohup bash -c "..." > /tmp/<job>.log 2>&1 < /dev/null &`, then poll the log) or pass `-o ServerAliveInterval=30`.
+  `/srv/<app>/data` isn't writable by the login user; put ad-hoc logs in `/tmp`.
+- Memory: with arabayya, checkpoint and playpatch the `mem_limit`s total ~6.7 GB (2026-10-23). The next service needs the resize.
+- **Sites that treat the server differently from the Mac (2026-10-24):** sqn-1 is a Hetzner (datacenter, Germany) address.
+  - `*.paradoxwikis.com` (Fastly) refuses it outright: HTTP 427, error 54113, on v4 and v6, for any user agent.
+  - YouTube shows the EU cookie-consent page (answered by the `SOCS=CAI` cookie). After a burst of requests it gives
+    `playabilityStatus` `LOGIN_REQUIRED` ("Sign in to confirm you're not a bot").
+  - Fandom, wiki.gg, Steam and Reddit work.
+  - Never work around a deliberate block: ask the site to allow the address, or use an official API (the YouTube Data
+    API for video metadata). Code must treat a block as "unknown", never as "gone" or "empty".
+- **Deploy right after a merge:** the newest image run can still be the previous commit's, because GitHub hasn't queued
+  main's yet. Checkpoint's `vps-deploy.sh` now waits for main's own run when the image's inputs changed (#521); copy
+  that wait into any app with the same deploy.

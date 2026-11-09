@@ -204,6 +204,10 @@ Claude: "I'll use ultrathink-debugger to investigate this edge case"
 
 Track work the same way in every repo, following the `project-tracking` skill: every PR names an issue (`Closes #N`; unplanned ops/infra work gets a short `type:chore` issue first), cards move Backlog → Ready → In progress → In review → Done, and Priority is the board's P0–P3 field. In a repo with `.github/board.env`, run `scripts/board.sh sync` at the start of a session. Change the standard in the skill, never in one repo's copy.
 
+## Peer review (all repos)
+
+Every PR gets a Codex review before merge, following the `codex-review` skill: `scripts/codex-review.sh` on the pushed branch (committed changes only; scope per repo in `.github/codex-review.env`), each finding verified against the code, a test or the data before acting, at most two rounds (a third only to check a P1 fix), a `## Codex review` section in the PR (found, fixed, declined and why), `codex-review.sh mark` once it settles, and merge only after CI has finished (the merge guard hook enforces both). It adds to tests and data measurements, never replaces them. Change the standard in the skill, never in one repo's copy.
+
 ## Secrets (all repos)
 
 Keep API keys and other secrets in Infisical, following the `secrets` skill: one Infisical project per repo (`dev` and `prod`), apps read plain environment variables (`infisical run` locally, a Keychain-held machine identity for scheduled jobs on the Mac, `infisical export` to a root-only env file on the VPS), and `.env` keeps non-secret settings only. Never print a secret value or ask the owner to paste one into the chat; move values with `infisical secrets set NAME=@file` and check them by fingerprint. Change the standard in the skill, never in one repo's copy.
@@ -219,6 +223,16 @@ Log, trace and report errors the same way in every service, following the `obser
 ## Remote sessions (Mac ↔ phone)
 
 Claude sessions on the Mac mini run in tmux, one session per project, so the owner can reach them from the iPhone, following the `remote-sessions` skill: `ccs <name> <dir> -c` opens or reattaches one (Warp tab on the Mac, Termius over Tailscale on the phone), and `preview <port|file>` prints a tailnet-only link for a dev server or mockup. When you start a server or produce something to look at, run `preview` and give the owner the link. Messaging between sessions works the same inside tmux. Record new traps in the skill.
+
+## Waiting on GitHub (all repos)
+
+Every `gh` call spends the owner's API quota: 5,000 GraphQL requests an hour per user, shared by every session and machine. Two forgotten `until` loops in one session burned it for a day (2026-11-03) and blocked the others' merges.
+
+- **Every wait ends on its own.** Never an open-ended `until`/`while` around `gh`: bound it by attempts (`for i in $(seq 1 30); do ...; sleep 20; done`, then report "not found" and stop). macOS has no `timeout`.
+- **Watch, don't poll:** once a run exists, `gh run watch <id> --exit-status -i 30` (its default interval is 3 s: always pass `-i`); for a PR, `gh pr checks <n> --watch -i 30`. Never poll faster than every 20 s.
+- **Finding a run for a commit:** a commit may get no run at all (paths filters, a docs-only change, a skipped workflow). Look for it a bounded number of times, and if none appears, say so instead of waiting.
+- **Long waits go in the background** (`run_in_background`), and you stop them (TaskStop) once the result is in or the work moved on; a wait you no longer need is still spending quota.
+- **Quota check:** `gh api graphql -f query='{rateLimit{remaining used resetAt}}'` (the REST `rate_limit` endpoint misreports it). Out of quota: wait for `resetAt`, don't retry in a loop.
 
 ## Communication Preferences
 

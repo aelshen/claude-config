@@ -49,7 +49,12 @@ Why each rule exists (October 2026 audit of kuudoh, arabayya and playpatch):
 ## Day to day (every session in a repo with `.github/board.env`)
 
 - **Start:** `scripts/board.sh sync`. Fix drift with `--apply` (it only moves cards), and tell
-  the user about unlinked merged PRs rather than inventing issues for old work.
+  the user about unlinked merged PRs rather than inventing issues for old work. It also lists
+  open issues with no priority; set those with `board.sh prio`.
+- **Issues in a companion repo** (public repo + private `<repo>-planning`): set
+  `BOARD_ISSUE_REPO=<owner>/<repo>-planning` in `.github/board.env`. Without it, `sync` checks
+  only the public repo's issues and reports "in step" while the planning issues drift
+  (PlayPatch, October 2026: 21 open issues with no column or priority went unflagged).
 - **Before writing code for a change:** find its issue (`gh issue list --search`), or open one
   with the matching form and `scripts/board.sh add <N> <Column> <P>`. Then
   `scripts/board.sh move <N> "In progress"` once the branch exists.

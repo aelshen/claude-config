@@ -15,6 +15,8 @@
 #   BOARD_OWNER=Kuudoh        # org or user that owns the Project
 #   BOARD_PROJECT=1           # project number
 #   BOARD_REPO=Kuudoh/kuudoh  # optional; defaults to the current repo
+#   BOARD_ISSUE_REPO=Org/x-planning  # optional; where the issues live, when not BOARD_REPO
+#                                    # (a public repo with a private planning companion)
 #   BOARD_SINCE=2026-10-07    # optional, inclusive; set it to the day AFTER adoption
 #                             # (compared in UTC: evening merges west of UTC are already tomorrow)
 #   BOARD_PR_CHECK=off        # optional: repo has no PR check on purpose (e.g. a planning repo)
@@ -40,7 +42,7 @@ gh() { # pass-through; explain the error gh prints for a rate-limited `gh projec
   return "$rc"
 }
 
-root="$(git rev-parse --show-toplevel 2>/dev/null)" || die "not inside a git repo"
+root="$(git rev-parse --show-toplevel 2>/dev/null)" || { [ -n "${BOARD_ENV:-}" ] || die "not inside a git repo"; root=; }  # BOARD_ENV: run outside a repo (a server image)
 env_file="${BOARD_ENV:-$root/.github/board.env}"  # BOARD_ENV: audit a repo without writing into it
 [ -f "$env_file" ] || die "no $env_file (see the project-tracking skill)"
 # shellcheck disable=SC1091
@@ -48,16 +50,27 @@ env_file="${BOARD_ENV:-$root/.github/board.env}"  # BOARD_ENV: audit a repo with
 : "${BOARD_OWNER:?BOARD_OWNER missing in .github/board.env}"
 : "${BOARD_PROJECT:?BOARD_PROJECT missing in .github/board.env}"
 BOARD_REPO="${BOARD_REPO:-$(gh repo view --json nameWithOwner --jq .nameWithOwner)}"
+# Issues (and their cards) can live in a companion repo; PRs are always BOARD_REPO's.
+ISSUE_REPO="${BOARD_ISSUE_REPO:-$BOARD_REPO}"
 
 cache="${XDG_CACHE_HOME:-$HOME/.cache}/project-tracking/${BOARD_OWNER}-${BOARD_PROJECT}.tsv"
 
-refresh() { # project id + every single-select field's options, one TSV line each
+refresh() { # project id + every single-select field's options, one TSV line each. One narrow query, not
+  # `gh project view`/`field-list`: those also read every card's linked PRs, so a token that can't see one PR (a
+  # fine-grained or other-repo token, e.g. on a server) fails them outright and the cache is never written.
   mkdir -p "$(dirname "$cache")"
-  {
-    printf '__project\t%s\t\t\n' "$(gh project view "$BOARD_PROJECT" --owner "$BOARD_OWNER" --format json --jq .id)"
-    gh project field-list "$BOARD_PROJECT" --owner "$BOARD_OWNER" --format json \
-      --jq '.fields[] | select(.options) | .name as $f | .id as $fid | .options[] | [$f, $fid, .name, .id] | @tsv'
-  } > "$cache.tmp" && mv "$cache.tmp" "$cache"
+  local kind q
+  for kind in organization user; do  # the project's owner is an org or a user; the wrong one is an error
+    q="query(\$o:String!,\$n:Int!){$kind(login:\$o){projectV2(number:\$n){id fields(first:100){nodes{... on ProjectV2SingleSelectField{id name options{id name}}}}}}}"
+    if gh api graphql -f query="$q" -f o="$BOARD_OWNER" -F n="$BOARD_PROJECT" --jq ".data.$kind.projectV2 |
+        (\"__project\\t\" + .id + \"\\t\\t\"), (.fields.nodes[] | select(.options) | .name as \$f | .id as \$fid | .options[] | [\$f, \$fid, .name, .id] | @tsv)" \
+        > "$cache.tmp" 2>/dev/null && [ -s "$cache.tmp" ]; then
+      mv "$cache.tmp" "$cache"
+      return 0
+    fi
+  done
+  rm -f "$cache.tmp"
+  die "can't read project $BOARD_PROJECT of $BOARD_OWNER (token scope, or the number is wrong)"
 }
 
 lookup() { # field name, option name -> "fieldId<TAB>optionId" (empty if unknown)
@@ -73,11 +86,11 @@ common="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" ||
 if [ -n "$common" ]; then items_cache="$common/project-tracking/${BOARD_OWNER}-${BOARD_PROJECT}.items.tsv"
 else items_cache="${cache%.tsv}.items.tsv"; fi
 
-cached_item() { [ -s "$items_cache" ] && awk -F'\t' -v r="$BOARD_REPO" -v n="$1" '$1 == r && $2 == n { print $3; exit }' "$items_cache" || true; }
+cached_item() { [ -s "$items_cache" ] && awk -F'\t' -v r="$ISSUE_REPO" -v n="$1" '$1 == r && $2 == n { print $3; exit }' "$items_cache" || true; }
 
 forget_item() {
   [ -s "$items_cache" ] || return 0
-  awk -F'\t' -v r="$BOARD_REPO" -v n="$1" '!($1 == r && $2 == n)' "$items_cache" > "$items_cache.tmp" || true
+  awk -F'\t' -v r="$ISSUE_REPO" -v n="$1" '!($1 == r && $2 == n)' "$items_cache" > "$items_cache.tmp" || true
   mv "$items_cache.tmp" "$items_cache"
 }
 
@@ -88,10 +101,10 @@ item_for() { # issue number -> project item id. Cached; on a miss item-add (idem
   id="$(cached_item "$1")"
   if [ -z "$id" ]; then
     id="$(gh project item-add "$BOARD_PROJECT" --owner "$BOARD_OWNER" \
-      --url "https://github.com/$BOARD_REPO/issues/$1" --format json --jq .id)"
+      --url "https://github.com/$ISSUE_REPO/issues/$1" --format json --jq .id)"
     [ -n "$id" ] || die "no project item for #$1 (not an issue number, or gh returned nothing)"
     mkdir -p "$(dirname "$items_cache")"
-    printf '%s\t%s\t%s\n' "$BOARD_REPO" "$1" "$id" >> "$items_cache"
+    printf '%s\t%s\t%s\n' "$ISSUE_REPO" "$1" "$id" >> "$items_cache"
   fi
   printf '%s\n' "$id"
 }
@@ -120,7 +133,7 @@ set_for() { # issue number, field name, option name. A cached id can be stale (c
 
 items_json() { # this repo's board items as [{n, status, priority, id}]
   gh project item-list "$BOARD_PROJECT" --owner "$BOARD_OWNER" --limit 2000 --format json |
-    jq --arg r "$BOARD_REPO" '[.items[] | select(.content.repository == $r and .content.type == "Issue")
+    jq --arg r "$ISSUE_REPO" '[.items[] | select(.content.repository == $r and .content.type == "Issue")
       | {n: .content.number, status: (.status // null), priority: (.priority // null), id, title: .content.title}]'
 }
 
@@ -147,21 +160,27 @@ case "$cmd" in
   sync)
     apply=false; [ "${1:-}" = "--apply" ] && apply=true
     board="$(items_json)"
-    issues="$(gh issue list -R "$BOARD_REPO" -s all -L 2000 --json number,state,title)"
+    issues="$(gh issue list -R "$ISSUE_REPO" -s all -L 2000 --json number,state,title)"
     prs="$(gh pr list -R "$BOARD_REPO" -s open -L 200 --json number,closingIssuesReferences)"
     merged="$(gh pr list -R "$BOARD_REPO" -s merged -L 30 ${BOARD_SINCE:+--search "merged:>=$BOARD_SINCE"} \
       --json number,title,labels,closingIssuesReferences,body)"
     # One action per line: "<issue#>\t<Column>\t<reason>"
-    actions="$(jq -rn --argjson b "$board" --argjson i "$issues" --argjson p "$prs" '
+    actions="$(jq -rn --argjson b "$board" --argjson i "$issues" --argjson p "$prs" --arg ir "github.com/$ISSUE_REPO/issues/" '
       ($b | map({key: (.n | tostring), value: .}) | from_entries) as $on
-      | ([$p[].closingIssuesReferences[].number] | unique) as $inreview
+      | ([$p[].closingIssuesReferences[] | select((.url // "") | contains($ir)) | .number] | unique) as $inreview
       | $i[] | . as $x | ($on[$x.number | tostring]) as $card
       | if $x.state == "CLOSED" then
           (if $card and $card.status != "Done" then "\($x.number)\tDone\tclosed, card in \($card.status // "no column")" else empty end)
         elif ($card | not) then "\($x.number)\t\(if ([$x.number] | inside($inreview)) then "In review" else "Backlog" end)\topen, not on the board"
         elif ([$x.number] | inside($inreview)) and ($card.status != "In review") then "\($x.number)\tIn review\tPR open, card in \($card.status // "no column")"
         elif $card.status == "Done" then "\($x.number)\tBacklog\treopened, card in Done"
+        elif $card.status == null then "\($x.number)\tBacklog\topen, card in no column"
         else empty end')"
+    # Priority is a judgement call: report, never set.
+    noprio="$(jq -rn --argjson b "$board" --argjson i "$issues" '
+      ($b | map({key: (.n | tostring), value: .}) | from_entries) as $on
+      | $i[] | select(.state == "OPEN") | . as $x | ($on[$x.number | tostring]) as $card
+      | select($card and $card.priority == null) | "#\($x.number) \($x.title)"')"
     unlinked="$(jq -r '.[] | select((.closingIssuesReferences | length) == 0
       and ([.labels[].name] | index("no-issue") | not)
       and ((.body // "") | gsub("(?s)```.*?```"; "") | gsub("`[^`]*`"; "") | test("(?i)\\b(close[sd]?|fix(e[sd])?|resolve[sd]?|refs?|part of)\\s+([\\w.-]+/[\\w.-]+)?#[0-9]+") | not))
@@ -172,6 +191,10 @@ case "$cmd" in
         echo "  #$n → $col   ($why)"
         if [ "$apply" = true ]; then set_for "$n" Status "$col"; fi
       done <<< "$actions"
+    fi
+    if [ -n "$noprio" ]; then
+      echo "Open issues with no priority (set with: board.sh prio <N> P0-P3):"
+      echo "$noprio" | sed 's/^/  /'
     fi
     if [ -n "$unlinked" ]; then
       echo "Merged PRs (last 30${BOARD_SINCE:+, since $BOARD_SINCE}) with no issue link and no no-issue label:"

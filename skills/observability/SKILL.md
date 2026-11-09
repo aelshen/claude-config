@@ -148,10 +148,13 @@ renaming is a migration (read both shapes until the old lines age out).
 
 Sentry stays for crash reports and alerts (and for the phone apps, which OTel doesn't
 cover here). Every Sentry event carries `trace_id` as a tag, plus `environment` and
-`release`, so a crash leads to its trace. Sentry's own tracing stays off
-(`traces_sample_rate=0`); traces go through OTel. Where a Sentry SDK is itself built on OTel
-(Sentry's Node SDK v8+, Python v3+), use its "existing OpenTelemetry setup" mode so there is
-one tracer provider, not two.
+`release`, so a crash leads to its trace. Sentry's own tracing stays off: no transactions
+go to Sentry; traces go through OTel. Where Sentry owns the tracer provider (its Node SDK v8+,
+the PlayPatch setup in `references/node.md`), its sampler also decides which spans OTel
+records, and `tracesSampleRate: 0` records none (checked with @sentry/nextjs 10.73). There,
+"off" means `tracesSampleRate: 1` plus `beforeSendTransaction: () => null`. Where you own the
+provider (arabayya's Python setup), keep `traces_sample_rate=0`. Use a Sentry SDK's "existing
+OpenTelemetry setup" mode when it has one, so there is one tracer provider, not two.
 
 ## Privacy
 

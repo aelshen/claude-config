@@ -1,8 +1,49 @@
 # Node services (Next.js, workers)
 
-No Node service has been built to this standard yet, so treat this as a plan: check each step
-against the library docs for the installed versions, and prove it with the collector check
-(`collector.md`) before calling it done. When one is done, record what actually worked here.
+**Reference implementation: PlayPatch** (Side-Quest-Nexus/playpatch #159 web, #160 workers,
+2026-10-30, `@sentry/nextjs` 10.73, OTel SDK 2.11, OTLP exporter 0.222). What worked, verified
+against a collector:
+
+- **Option A works.** Pass the processors through `openTelemetrySpanProcessors`; Sentry then
+  builds a `BasicTracerProvider` with them next to its own. Run `Sentry.init` on every Node
+  start, **with or without a DSN**: without one it sends nothing but still registers the
+  provider, so trace ids exist in dev and self-hosted installs.
+- **Sampling:** spans are only recorded when Sentry's sampler keeps them, so set
+  `tracesSampleRate: 1` (otherwise the request line and the export see only a sample) and
+  keep Sentry's own tracing off as the standard says: `beforeSendTransaction: () => null`.
+  PlayPatch is an owner-approved exception (2026-10-30): it keeps 25% of web transactions in
+  Sentry, chosen by a hash of the trace id in `beforeSendTransaction`. Don't copy that
+  without the owner's say-so.
+- **Sampling later:** with Sentry owning the provider, `OTEL_TRACES_SAMPLER` /
+  `OTEL_TRACES_SAMPLER_ARG` are ignored. Lower `tracesSampleRate` (or use `tracesSampler`)
+  instead; it samples what OTLP exports, and Sentry gets nothing either way while
+  transactions are dropped. Unsampled requests still get a valid trace id, so log lines and
+  `X-Trace-Id` keep working; only their spans aren't recorded. If OTel sampling must differ
+  from Sentry's (e.g. a Sentry share as in PlayPatch), use option B.
+- **Sentry's resource pins `service.version` to its SDK version.** Override it in your export
+  wrapper (`span.resource.merge(...)`). It does honour `OTEL_SERVICE_NAME` and
+  `OTEL_RESOURCE_ATTRIBUTES`.
+- **Pick the OTLP exporter version whose `@opentelemetry/sdk-trace` matches Sentry's**, or pnpm
+  installs a second copy. pnpm 8 rewrites a prettier-formatted lockfile: run prettier on it.
+- **Request line and X-Trace-Id from a Node `http.Server.prototype.emit` hook** (patch
+  `res.writeHead` to read the active span; log on `close`), not a span processor: one place,
+  sees cookies, independent of sampling. Route template: Next's request meta
+  (`Symbol.for('NextInternalRequestMeta')`, `match.definition.pathname`).
+- **Sanitise before export, not only filter.** Sentry's http spans carry `url.full`,
+  `http.target`, query strings, client IP and user agent. Export an allow-list of attributes,
+  scrub ids and queries from span names, drop span events and status messages
+  (`exportView` in playpatch `telemetry.ts`). Codex caught this; the plan below didn't.
+- **Kid filter = hold the trace until its local root ends**, then forward or drop it whole;
+  mark traces from a request hook for things spans can't see (cookies); drop stuck and
+  oversized traces. Children that start after the root settled are judged alone.
+- **Workers:** `traced(queue, fn)` wraps each processor in a CONSUMER span; enqueue with
+  `propagation.inject` into `data._trace` (Sentry's propagator writes `sentry-trace` and
+  `baggage`, which is fine). Allow-list the queues that may export, with a test that every
+  queue is in one list.
+- Tests: no global context manager in jest; spy `trace.getActiveSpan`, or register a small
+  AsyncLocalStorage `ContextManager`.
+
+The original plan follows; where it differs from the notes above, the notes win.
 
 ## Logs: pino
 

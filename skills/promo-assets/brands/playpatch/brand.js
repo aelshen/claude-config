@@ -1,17 +1,23 @@
-// PlayPatch brand for promo assets. Colors match sidequest.nexus `.t-playpatch` (styles.css).
+// PlayPatch brand for promo assets: the Patchwork identity (apps/web tailwind.config.ts and
+// docs/BRAND.md in the PlayPatch repo). Warm paper background, tomato accent, plum and teal patches.
+// Fonts: Figtree (body) and Fraunces (headlines), both SIL OFL; Fraunces is exposed as --font-display.
 window.PROMO_BRAND = {
   id: "playpatch",
   name: "PlayPatch",
-  tagline: "Videos your kids love, chosen by you",
-  url: "sidequest.nexus/playpatch",
+  tagline: "Every video approved by a parent first",
+  url: "playpatch.app",
   themes: {
-    light: { bg: "#f7f7fc", surface: "#ffffff", ink: "#1a1a2e", muted: "#55556b", line: "#deddf0", accent: "#4f46e5", accentInk: "#ffffff", accentSoft: "#ebebfd" },
-    dark:  { bg: "#12121f", surface: "#1b1b2e", ink: "#ebebf5", muted: "#a8a8c0", line: "#333350", accent: "#a5b4fc", accentInk: "#12122a", accentSoft: "#26264a" },
+    light: { bg: "#FBF6EC", surface: "#FFFFFF", ink: "#2B2420", muted: "#6E5E4F", line: "#E8DDCB", accent: "#C2410C", accentInk: "#FFFFFF", accentSoft: "#FCE2D5" },
+    dark:  { bg: "#1C1714", surface: "#2B2420", ink: "#FBF7F0", muted: "#D6C7B0", line: "#54473C", accent: "#EB7650", accentInk: "#1C1714", accentSoft: "#3B312A" },
   },
-  extraColors: ["#6366f1", "#8b5cf6"], // the icon's gradient
+  extraColors: ["#E4572E", "#6F4778", "#F0E3F0", "#2A9D8F", "#D6F0EB", "#F8C3AA", "#FBF7F0"],
   logos: {
     light: { icon: "logos/icon.svg" },
     dark:  { icon: "logos/icon.svg" },
+  },
+  fonts: {
+    sans: { family: "Figtree", files: [{ src: "fonts/figtree-latin.woff2", weight: "300 900" }] },
+    display: { family: "Fraunces", files: [{ src: "fonts/fraunces-latin.woff2", weight: "400 900" }] },
   },
   rtl: false,
 };
