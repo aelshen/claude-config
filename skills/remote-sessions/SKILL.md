@@ -101,6 +101,8 @@ is the real fix for outages. Don't loop `ccs-up` on a timer: it would revive ses
   `tmux send-keys -t llc -l '<text>'` then a separate `tmux send-keys -t llc Enter` (one call can leave the text
   sitting in the prompt as a paste). `ccs` can't start it: tmux takes its environment from the server, not the
   caller, so the variable goes inside the command (the `env` column in `sessions.conf`).
+  Long `send-keys` messages arrive cut off (the receiver sees only the end): keep them short, or write the text
+  to a file and send its path.
 - **Option-Delete (delete word) doesn't work in tmux by default:** Warp sends it as a plain Delete
   unless the app switches on Warp's extended keyboard mode, which Claude does outside tmux but can't through
   tmux. Fix in Warp: Settings → Features → Keys → "Left Option key is Meta" (right Option still types
