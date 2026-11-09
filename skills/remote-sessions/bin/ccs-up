@@ -1,0 +1,33 @@
+#!/bin/bash
+# ccs-up: recreate the Claude tmux sessions listed in ../sessions.conf. Safe to run any time:
+# sessions that are already running are left alone. Run by launchd at login
+# (~/Library/LaunchAgents/nexus.sidequest.ccs-up.plist) so a reboot brings them back.
+#   ccs-up            start whatever is missing
+#   CCS_UP_DRY=1 ccs-up   print what it would start
+HERE=$(cd "$(dirname "$0")" && pwd)
+CONF=${CCS_CONF:-$HERE/../sessions.conf}
+TMUX_BIN=${TMUX_BIN:-/opt/homebrew/bin/tmux}
+CLAUDE_BIN=${CLAUDE_BIN:-$HOME/.local/bin/claude}
+read -ra TA <<<"${TMUX_ARGS:-}"   # test hook, e.g. TMUX_ARGS="-L test" for an isolated server
+t() { "$TMUX_BIN" ${TA[@]+"${TA[@]}"} "$@"; }
+
+[ -n "${CCS_UP_DELAY:-}" ] && sleep "$CCS_UP_DELAY"   # at login: let the network and mounts settle
+started=0; skipped=0; failed=0
+while IFS='|' read -r name dir args env; do
+  name=$(echo "$name" | xargs); [[ -z "$name" || "$name" == \#* ]] && continue
+  dir=$(echo "$dir" | xargs); args=$(echo "$args" | xargs); env=$(echo "$env" | xargs)
+  dir=$(eval echo "$dir")
+  if t has-session -t "=$name" 2>/dev/null; then skipped=$((skipped+1)); echo "skip   $name (running)"; continue; fi
+  if [ ! -d "$dir" ]; then failed=$((failed+1)); echo "FAIL   $name: folder missing: $dir"; continue; fi
+  run="$env $CLAUDE_BIN --dangerously-skip-permissions $args"
+  # if the resume or continue finds nothing, start a fresh conversation instead
+  [ -n "$args" ] && run="$run || $env $CLAUDE_BIN --dangerously-skip-permissions"
+  if [ -n "${CCS_UP_DRY:-}" ]; then echo "would  $name in $dir: $run"; continue; fi
+  if t new-session -d -s "$name" -c "$dir" -e CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1 "$run; exec \$SHELL"; then
+    started=$((started+1)); echo "start  $name"; sleep 2
+  else
+    failed=$((failed+1)); echo "FAIL   $name: tmux new-session failed"
+  fi
+done < "$CONF"
+echo "ccs-up: started $started, already running $skipped, failed $failed"
+[ "$failed" -eq 0 ]
