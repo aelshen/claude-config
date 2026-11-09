@@ -9,7 +9,9 @@ if ! $TMUX_BIN has-session -t "=$name" 2>/dev/null; then
   # Owner's default: skip permission prompts. Start one with prompts with CCS_PROMPTS=1 ccs ...
   claude="$HOME/.local/bin/claude"; [ -z "${CCS_PROMPTS:-}" ] && claude="$claude --dangerously-skip-permissions"
   # With -c and no earlier conversation in that folder, start a fresh one instead.
-  run="$claude $*"; [[ " $* " == *" -c "* ]] && run="$claude $* || $claude"
+  # each argument shell-quoted, so values with spaces or metacharacters reach claude unchanged
+  q=""; for a in "$@"; do q="$q $(printf '%q' "$a")"; done
+  run="$claude$q"; [[ " $* " == *" -c "* ]] && run="$claude$q || $claude"
   # Classic renderer inside tmux: output goes to tmux history, so phone swipes / the wheel scroll it
   # (Claude's fullscreen mode keeps scrolling to itself). Claude outside tmux keeps fullscreen.
   $TMUX_BIN new-session -d -s "$name" -c "$dir" -e CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1 "$run; exec \$SHELL"
