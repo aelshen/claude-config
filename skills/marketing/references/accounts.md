@@ -15,14 +15,18 @@ Claude drives the browser; the owner is at the keyboard for anything secret or l
 
 ## Doing it (one platform at a time)
 
-1. Open the platform's sign-up page with the Playwright browser (`mcp__playwright__browser_navigate`).
+The browser is the Playwright MCP server (`mcp__playwright__*` tools). If those tools aren't available, add it
+once with `claude mcp add playwright -- npx @playwright/mcp@latest` (ask the owner first) and restart the session.
+
+1. Open the platform's sign-up page in that browser (`mcp__playwright__browser_navigate`).
 2. Fill the non-secret fields: email alias, display name, birthday (the owner's real one, or the business date the
    platform asks for; never invented), handle.
 3. **Stop and hand over** for: password (the owner types it and saves it to their password manager), email or SMS
    codes, phone number, CAPTCHA, and the terms checkbox. Say exactly what's on screen and wait.
    No `browser_snapshot` or screenshot while a password or code field holds a value. After the owner says it's
    done, snapshot only to confirm the next step.
-4. Profile: avatar (from the brand folder in `promo-assets/brands/<brand>/`), banner, bio (from the brief, voice.md
+4. Profile: avatar and banner from the product brief's Assets section (a `promo-assets` brand, built-in or
+   external, or the product's own brand folder); if the brief names none, ask the owner. Then the bio (from the brief, voice.md
    rules), website link (live store or product page only), category. Privacy: no contact syncing, no "find me by
    phone number", DMs from followers only where available.
 5. Turn on 2FA with the owner (they scan the QR code; never screenshot it).
