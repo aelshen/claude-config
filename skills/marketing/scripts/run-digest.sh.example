@@ -1,0 +1,27 @@
+#!/bin/bash
+# Daily marketing digest (launchd: com.sidequest.marketing-digest). Writes ~/Work/marketing/digest/<date>.md
+# Keys: Infisical via the Mac's machine identity (Keychain service delphi-infisical, per the secrets skill),
+# project from INFISICAL_PROJECT below; if that login or access fails, digest.py falls back to its Keychain items.
+export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+INFISICAL_PROJECT="db860051-d60f-4554-a7dd-0ec72972b169"   # arabayya (holds MARKETING_YOUTUBE_KEY)
+cd "$HOME/Work/marketing" || exit 1
+mkdir -p state digest
+log() { echo "$(date '+%F %T') $*" >> state/digest.log; }
+DIGEST=(/usr/bin/python3 "$HOME/.claude/skills/marketing/scripts/digest.py" --draft)
+out=""
+id=$(security find-generic-password -s delphi-infisical -a client-id -w 2>/dev/null)
+secret=$(security find-generic-password -s delphi-infisical -a client-secret -w 2>/dev/null)
+if [ -n "$id" ] && [ -n "$secret" ]; then
+  token=$(infisical login --method=universal-auth --client-id="$id" --client-secret="$secret" --plain --silent --telemetry=false 2>/dev/null)
+  if [ -n "$token" ]; then
+    out=$(infisical run --token="$token" --projectId="$INFISICAL_PROJECT" --env=prod --silent --telemetry=false -- "${DIGEST[@]}" 2>>state/digest.log) \
+      || { log "infisical run failed (identity not in project?); falling back to Keychain"; out=""; }
+  else
+    log "infisical machine-identity login failed; falling back to Keychain"
+  fi
+fi
+[ -z "$out" ] && out=$("${DIGEST[@]}" 2>>state/digest.log)
+# Only the generated summary line (digits only), never post text; passed to AppleScript as an argument, not code.
+n=$(grep -Eo '^(# Later run [0-9]{2}:[0-9]{2}: )?[0-9]+ need you, [0-9]+ new in total\.$' "$out" 2>/dev/null | tail -1 | grep -Eo '[0-9]+ need you, [0-9]+ new in total\.')
+/usr/bin/osascript -e 'on run argv' -e 'display notification (item 1 of argv) with title "Marketing digest"' -e 'end run' "${n:-digest written}" 2>/dev/null
+log "$out $n"

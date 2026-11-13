@@ -69,6 +69,23 @@ plan and added the content, licensing and store rules below.
 
 Start each new product with a 3-week pilot of one series and one community before adding more.
 
+## The daily digest (watching, so the owner doesn't have to)
+
+`scripts/digest.py` runs every morning at 7:30 on the Mac (launchd `com.sidequest.marketing-digest`, runner
+`~/Work/marketing/run-digest.sh`, example in `scripts/run-digest.sh.example`) and writes
+`~/Work/marketing/digest/<date>.md`, then shows a Mac notification.
+
+- Sources per product in `~/Work/marketing/sources.json`: subreddit feeds (`reddit_subs`), comments on our own
+  YouTube channels (`youtube_channels`; read key in the Keychain, service `marketing-digest`, account named in the
+  config), and product-owned commands that print JSON lines (`commands`, e.g. store reviews from the product's
+  repo, so its keys stay there). Reddit search feeds and Bluesky search answer 403 to unauthenticated reads.
+- Only items not seen before (state in `~/Work/marketing/state/seen.json`). Flagged: anything on our own channels
+  not yet answered, and posts matching the product's `keywords` (tune them so the list stays short).
+- `--draft`: one `claude -p --model sonnet` call per product drafts replies for the flagged items from the brief
+  and `references/voice.md`, or says skip. Collecting is free; drafting is a few cents of plan usage a day.
+- The owner reads the digest and posts what they like. The digest never posts.
+- Adding a product: add its block to `sources.json` once its brief exists.
+
 ## Accounts (setup and tracking)
 
 Read `references/accounts.md` before creating or changing any account. In short:
@@ -101,7 +118,7 @@ date	product	channel	kind	what	link	result	next
 
 | Product | Live | Pilot |
 |---|---|---|
-| arabayya | Google Play (iOS waiting for review: no App Store mentions) | 2 shorts a week + r/learnarabic replies + alma-mater email |
+| arabayya | Google Play and App Store (iOS released 2026-11-13) | accounts set up (Instagram @arabayya.app, YouTube @arabayya_app, Buffer; TikTok pending); daily digest on; shorts parked by the owner; r/learn_arabic replies + alma-mater email |
 | Checkpoint | iOS (Play applied) | after arabayya's pilot: patch-change shorts, game communities, cited wikis and creators |
 | PlayPatch | hosted beta | waits for the YouTube API review to close; parents only |
 
