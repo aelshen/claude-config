@@ -1,8 +1,26 @@
 #!/bin/bash
 # Daily marketing digest (launchd: com.sidequest.marketing-digest). Writes ~/Work/marketing/digest/<date>.md
-export PATH="/Users/ahmadelshenawy/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+# Keys: Infisical via the Mac's machine identity (Keychain service delphi-infisical, per the secrets skill),
+# project from INFISICAL_PROJECT below; if that login or access fails, digest.py falls back to its Keychain items.
+export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+INFISICAL_PROJECT="db860051-d60f-4554-a7dd-0ec72972b169"   # arabayya (holds MARKETING_YOUTUBE_KEY)
 cd "$HOME/Work/marketing" || exit 1
-out=$(/usr/bin/python3 "$HOME/.claude/skills/marketing/scripts/digest.py" --draft 2>>state/digest.log)
-n=$(sed -n '3p' "$out" 2>/dev/null)
+mkdir -p state digest
+log() { echo "$(date '+%F %T') $*" >> state/digest.log; }
+DIGEST=(/usr/bin/python3 "$HOME/.claude/skills/marketing/scripts/digest.py" --draft)
+out=""
+id=$(security find-generic-password -s delphi-infisical -a client-id -w 2>/dev/null)
+secret=$(security find-generic-password -s delphi-infisical -a client-secret -w 2>/dev/null)
+if [ -n "$id" ] && [ -n "$secret" ]; then
+  token=$(infisical login --method=universal-auth --client-id="$id" --client-secret="$secret" --plain --silent --telemetry=false 2>/dev/null)
+  if [ -n "$token" ]; then
+    out=$(infisical run --token="$token" --projectId="$INFISICAL_PROJECT" --env=prod --silent --telemetry=false -- "${DIGEST[@]}" 2>>state/digest.log) \
+      || { log "infisical run failed (identity not in project?); falling back to Keychain"; out=""; }
+  else
+    log "infisical machine-identity login failed; falling back to Keychain"
+  fi
+fi
+[ -z "$out" ] && out=$("${DIGEST[@]}" 2>>state/digest.log)
+n=$(grep -E "need you" "$out" 2>/dev/null | tail -1 | sed -E 's/^# (Later run [0-9:]+: )?//')
 /usr/bin/osascript -e "display notification \"${n:-digest written}\" with title \"Marketing digest\"" 2>/dev/null
-echo "$(date '+%F %T') $out $n" >> state/digest.log
+log "$out $n"

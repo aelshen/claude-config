@@ -96,12 +96,13 @@ def reddit_feed(url: str, label: str) -> list[dict]:
     return items
 
 
-def youtube_comments(channel_id: str, key_account: str, label: str) -> list[dict]:
-    key = keychain(key_account)
+def youtube_comments(channel_id: str, key_env: str | None, key_account: str | None, label: str) -> list[dict]:
+    # Infisical (via `infisical run` in the runner) puts the key in the environment; Keychain is the fallback.
+    key = (os.environ.get(key_env) if key_env else None) or (keychain(key_account) if key_account else None)
     if not key:
-        log(f"{label}: no key in Keychain (marketing-digest / {key_account})")
+        log(f"{label}: no key ({key_env or '-'} unset, Keychain marketing-digest/{key_account or '-'} empty)")
         return []
-    q = urllib.parse.urlencode({"part": "snippet", "allThreadsRelatedToChannelId": channel_id,
+    q = urllib.parse.urlencode({"part": "snippet,replies", "allThreadsRelatedToChannelId": channel_id,
                                 "maxResults": 50, "order": "time", "key": key})
     status, body = fetch(f"https://www.googleapis.com/youtube/v3/commentThreads?{q}")
     if status != 200:
@@ -115,6 +116,10 @@ def youtube_comments(channel_id: str, key_account: str, label: str) -> list[dict
     items = []
     for t in json.loads(body).get("items", []):
         top = t["snippet"]["topLevelComment"]["snippet"]
+        ours = [r for r in t.get("replies", {}).get("comments", [])
+                if r["snippet"].get("authorChannelId", {}).get("value") == channel_id]
+        if top.get("authorChannelId", {}).get("value") == channel_id:
+            continue  # our own comment
         items.append({
             "id": "yt:" + t["id"],
             "source": label,
@@ -125,6 +130,8 @@ def youtube_comments(channel_id: str, key_account: str, label: str) -> list[dict
             "date": top.get("publishedAt", ""),
             "replies": t["snippet"].get("totalReplyCount", 0),
             "own_channel": True,
+            # replies beyond the 5 returned aren't checked; a long thread with our reply further down still flags
+            "answered": bool(ours),
         })
     return items
 
@@ -237,13 +244,15 @@ def main() -> int:
             items += reddit_feed("https://www.reddit.com/search.rss?" + urllib.parse.urlencode(
                 {"q": q, "sort": "new", "t": "week"}), f"Reddit search “{q}”")
         for ch in p.get("youtube_channels", []):
-            items += youtube_comments(ch["id"], ch["key_account"], f"YouTube {ch.get('handle', ch['id'])}")
+            items += youtube_comments(ch["id"], ch.get("key_env"), ch.get("key_account"),
+                                      f"YouTube {ch.get('handle', ch['id'])}")
         for c in p.get("commands", []):
             items += command_feed(c["cmd"], c.get("cwd", "~"), c["label"])
 
         new = []
         for it in items:
-            if it["id"] in seen:
+            seen_key = f"{product}|{it['id']}"
+            if seen_key in seen:
                 continue
             try:
                 when = dt.datetime.fromisoformat(it["date"].replace("Z", "+00:00"))
@@ -254,7 +263,7 @@ def main() -> int:
             except Exception:
                 pass
             new.append(it)
-            seen[it["id"]] = today
+            seen[seen_key] = today
 
         flagged = []
         for it in new:
@@ -289,11 +298,17 @@ def main() -> int:
             lines += ["", "Also new, not flagged: " + ", ".join(f"{n} in {s}" for s, n in by_src.items())]
         sections.append("\n".join(lines))
 
-    head = f"# Marketing digest {today}\n\n{totals['flagged']} need you, {totals['new']} new in total.\n"
-    out = head + "\n\n".join(sections) + "\n"
     out_path = ROOT / "digest" / f"{today}.md"
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(out)
+    summary = f"{totals['flagged']} need you, {totals['new']} new in total."
+    body = "\n\n".join(sections) + "\n"
+    if out_path.exists() and not args.dry_run:
+        # A later run the same day: keep the earlier items (they're marked seen) and add this run below.
+        stamp = dt.datetime.now().strftime("%H:%M")
+        with out_path.open("a") as f:
+            f.write(f"\n---\n\n# Later run {stamp}: {summary}\n\n" + body)
+    else:
+        out_path.write_text(f"# Marketing digest {today}\n\n{summary}\n" + body)
     if not args.dry_run:
         seen_path.parent.mkdir(parents=True, exist_ok=True)
         # forget ids older than 60 days
