@@ -24,8 +24,8 @@ What each place expects, and what to check before the first post there.
   plus a short description with the link).
 - Consistency beats volume: 2 a week, every week, for a pilot.
 - Reply to comments in the owner's voice (drafted by Claude, sent by the owner).
-- Business vs creator account: start as a creator/personal account (more music options); switch later if ads or
-  analytics need it.
+- These are business accounts promoting a product: use only commercially cleared music (TikTok Commercial Music
+  Library, YouTube Audio Library, Instagram's business-cleared tracks), whatever the account type.
 
 ## Bluesky and X
 

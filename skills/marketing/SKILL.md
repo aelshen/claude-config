@@ -49,6 +49,9 @@ plan and added the content, licensing and store rules below.
 
 ## The weekly loop (2 to 4 owner-hours)
 
+0. **No brief yet?** A product without `marketing/BRIEF.md` gets one first: ask that repo's session to write it
+   from `references/brief.md` (or draft it and send it to them to check). No packet for a product until its brief
+   exists.
 1. **Read** the product briefs, `~/Work/marketing/log.tsv` (what went out, what got replies) and anything the
    owner forwarded (comments, emails).
 2. **Build the packet** in `~/Work/marketing/packets/<yyyy-mm-dd>.md`, per product:

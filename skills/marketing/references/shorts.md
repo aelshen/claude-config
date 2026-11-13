@@ -11,10 +11,16 @@ Faceless, real, slow enough to read. One render goes to all three platforms.
 - Body: the real app capture (screen recording or a `promo-assets` scene built from real captures), with large
   captions so it works muted. Keep the top 15% and bottom 25% free of key text (platform UI covers them).
 - End: the app name and where to get it (live stores only), 2 s. No "link in bio!!" voice; the caption carries it.
-- Audio: the app's own sounds, or quiet music from the platform's own licensed library added at posting time.
+- Audio: the app's own sounds, or music cleared for commercial use: TikTok's Commercial Music Library, Instagram's
+  royalty-free / business-cleared tracks, YouTube Audio Library. These are promotional accounts, so a platform's
+  general "popular" music is not cleared for them.
   The owner's voice only if a clip truly needs it. AI voice from the app is labelled "AI voice" on screen or muted.
-- Credits on screen for any third-party content, in the form its license asks for (e.g. "Text: Wikipedia,
-  CC BY-SA 4.0, adapted").
+- Credits for any third-party content, in the form its license asks for: a short line on screen (e.g. "Text:
+  Wikipedia, CC BY-SA 4.0, adapted") **and** the full credit in the caption or description: the source title and
+  link, the authors ("Wikipedia contributors", the book's credited author and illustrator), the license name and
+  link, and "adapted" if changed (e.g. "Text adapted from 'القاهرة', Egyptian Arabic Wikipedia
+  (https://arz.wikipedia.org/wiki/...), Wikipedia contributors, CC BY-SA 4.0
+  https://creativecommons.org/licenses/by-sa/4.0/").
 
 ## Making one
 
