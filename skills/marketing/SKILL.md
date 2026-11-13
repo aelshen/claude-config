@@ -118,7 +118,7 @@ date	product	channel	kind	what	link	result	next
 
 | Product | Live | Pilot |
 |---|---|---|
-| arabayya | Google Play (iOS waiting for review: no App Store mentions) | 2 shorts a week + r/learnarabic replies + alma-mater email |
+| arabayya | Google Play and App Store (iOS released 2026-11-13) | accounts set up (Instagram @arabayya.app, YouTube @arabayya_app, Buffer; TikTok pending); daily digest on; shorts parked by the owner; r/learn_arabic replies + alma-mater email |
 | Checkpoint | iOS (Play applied) | after arabayya's pilot: patch-change shorts, game communities, cited wikis and creators |
 | PlayPatch | hosted beta | waits for the YouTube API review to close; parents only |
 

@@ -33,7 +33,8 @@ ROOT = Path(os.environ.get("MARKETING_HOME", HOME / "Work" / "marketing"))
 SKILL = Path(__file__).resolve().parent.parent
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) side-quest-marketing-digest/0.1"
 ATOM = "{http://www.w3.org/2005/Atom}"
-REDDIT_PAUSE_S = 12  # Reddit answers 429 to quick successive feed reads
+REDDIT_PAUSE_S = 12
+SOURCE_ERRORS: list[str] = []  # shown at the top of the digest so a silent gap can't look like "nothing new"  # Reddit answers 429 to quick successive feed reads
 
 
 def log(msg: str) -> None:
@@ -79,6 +80,7 @@ def reddit_feed(url: str, label: str) -> list[dict]:
         break
     if status != 200:
         log(f"reddit {label}: HTTP {status}")
+        SOURCE_ERRORS.append(f"{label}: HTTP {status}, not checked")
         return []
     items = []
     root = ET.fromstring(body)
@@ -101,6 +103,7 @@ def youtube_comments(channel_id: str, key_env: str | None, key_account: str | No
     key = (os.environ.get(key_env) if key_env else None) or (keychain(key_account) if key_account else None)
     if not key:
         log(f"{label}: no key ({key_env or '-'} unset, Keychain marketing-digest/{key_account or '-'} empty)")
+        SOURCE_ERRORS.append(f"{label}: no API key, comments were NOT checked")
         return []
     q = urllib.parse.urlencode({"part": "snippet,replies", "allThreadsRelatedToChannelId": channel_id,
                                 "maxResults": 50, "order": "time", "key": key})
@@ -115,6 +118,7 @@ def youtube_comments(channel_id: str, key_env: str | None, key_account: str | No
             except Exception:
                 pass
             log(f"{label}: HTTP {status} {msg[:80]}")
+            SOURCE_ERRORS.append(f"{label}: HTTP {status}, comments may be incomplete")
             break
         data = json.loads(body)
         threads += data.get("items", [])
@@ -126,7 +130,6 @@ def youtube_comments(channel_id: str, key_env: str | None, key_account: str | No
         top = t["snippet"]["topLevelComment"]["snippet"]
         replies = t.get("replies", {}).get("comments", [])
         mine = lambda c: c["snippet"].get("authorChannelId", {}).get("value") == channel_id
-        ours = [r for r in replies if mine(r)]
         if top.get("authorChannelId", {}).get("value") == channel_id:
             others = [r for r in replies if not mine(r)]
             if not others:
@@ -135,19 +138,20 @@ def youtube_comments(channel_id: str, key_env: str | None, key_account: str | No
             if mine(last):
                 continue  # we already answered the latest reply
             top = others[-1]["snippet"]  # surface the viewer's reply
-            ours = []
+        latest = max([top.get("publishedAt", "")] + [r["snippet"].get("publishedAt", "") for r in replies])
         items.append({
-            "id": "yt:" + t["id"],
+            # thread id + latest activity: a new reply makes the thread new again
+            "id": f"yt:{t['id']}:{latest}",
             "source": label,
             "title": "Comment on " + (t["snippet"].get("videoId") or "the channel"),
             "text": strip_html(top.get("textDisplay", ""))[:1200],
             "url": f"https://www.youtube.com/watch?v={t['snippet'].get('videoId','')}&lc={t['id']}",
             "author": top.get("authorDisplayName", ""),
-            "date": top.get("publishedAt", ""),
+            "date": latest,
             "replies": t["snippet"].get("totalReplyCount", 0),
             "own_channel": True,
-            # replies beyond the 5 returned aren't checked; a long thread with our reply further down still flags
-            "answered": bool(ours),
+            # answered = the newest comment in the thread is ours (only the 5 replies the API returns are seen)
+            "answered": bool(replies) and mine(max(replies, key=lambda r: r["snippet"].get("publishedAt", ""))),
         })
     return items
 
@@ -162,6 +166,7 @@ def command_feed(cmd: str, cwd: str, label: str) -> list[dict]:
         return []
     if out.returncode != 0:
         log(f"{label}: exit {out.returncode}")
+        SOURCE_ERRORS.append(f"{label}: failed (exit {out.returncode}), not checked")
         return []
     items = []
     for line in out.stdout.splitlines():
@@ -325,7 +330,9 @@ def main() -> int:
     out_path = ROOT / "digest" / (f"{today}.dry-run.md" if args.dry_run else f"{today}.md")
     out_path.parent.mkdir(parents=True, exist_ok=True)
     summary = f"{totals['flagged']} need you, {totals['new']} new in total."
-    body = "\n\n".join(sections) + "\n"
+    warn = ("\n**Sources that failed (check them by hand today):**\n" + "\n".join(f"- {e}" for e in SOURCE_ERRORS) + "\n\n") \
+        if SOURCE_ERRORS else ""
+    body = warn + "\n\n".join(sections) + "\n"
     if out_path.exists() and not args.dry_run:
         # A later run the same day: keep the earlier items (they're marked seen) and add this run below.
         stamp = dt.datetime.now().strftime("%H:%M")
