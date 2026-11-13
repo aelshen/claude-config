@@ -33,6 +33,27 @@ once with `claude mcp add playwright -- npx @playwright/mcp@latest` (ask the own
 6. Record it in `~/Work/marketing/accounts.md` and add a `log.tsv` row (`kind: account`).
 7. Close the browser tab.
 
+## Traps seen (2026-11-13, arabayya)
+
+- Passwords: the 1Password CLI (`op`, unlocked with Touch ID). Create the login item in the "Side Quest" vault
+  with a generated password (title "<platform> - <product>", the product alias as username, the site URL, output
+  to /dev/null), then copy its password field straight to the clipboard for the owner to paste.
+  `~/.claude/hooks/op-guard.sh` blocks every other vault, deleting/editing/moving items, and any command that
+  would print a secret (it also blocks example commands written through the shell, so edit docs with an editor).
+  TikTok caps passwords at 20 characters.
+- TikTok web sign-up in the automated browser hit "Maximum number of attempts reached" on Send code after one
+  reload. Do TikTok from the phone app, or retry a day later.
+- A new Google account on a non-Gmail alias forces phone verification, and numbers used too often are rejected.
+  A product's YouTube channel runs on the Workspace account admin@sidequest.nexus instead.
+- YouTube refuses handles that look like domains (`@arabayya.app`); use `_` (`@arabayya_app`).
+- Instagram web: switching to Business works (category App page, hide contact info, skip Facebook); bio links
+  can only be edited in the phone app.
+- The home Pi-hole blocks `l.instagram.com`, which breaks Instagram OAuth hand-offs (e.g. Buffer). Take the `u=`
+  parameter from the blocked URL in the network log, open it directly, and delete any file that captured it.
+- Dark pages: `browser_emulate_media` with `colorScheme: light`. TikTok re-rendered and cleared its form.
+- Avatar uploads only work from the Playwright MCP's allowed folder (`.playwright-mcp` in the session's working
+  directory): copy the image there first.
+
 ## accounts.md format
 
 ```

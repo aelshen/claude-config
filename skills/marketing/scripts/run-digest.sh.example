@@ -1,0 +1,8 @@
+#!/bin/bash
+# Daily marketing digest (launchd: com.sidequest.marketing-digest). Writes ~/Work/marketing/digest/<date>.md
+export PATH="/Users/ahmadelshenawy/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+cd "$HOME/Work/marketing" || exit 1
+out=$(/usr/bin/python3 "$HOME/.claude/skills/marketing/scripts/digest.py" --draft 2>>state/digest.log)
+n=$(sed -n '3p' "$out" 2>/dev/null)
+/usr/bin/osascript -e "display notification \"${n:-digest written}\" with title \"Marketing digest\"" 2>/dev/null
+echo "$(date '+%F %T') $out $n" >> state/digest.log
