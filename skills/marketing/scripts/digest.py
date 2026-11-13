@@ -104,22 +104,38 @@ def youtube_comments(channel_id: str, key_env: str | None, key_account: str | No
         return []
     q = urllib.parse.urlencode({"part": "snippet,replies", "allThreadsRelatedToChannelId": channel_id,
                                 "maxResults": 50, "order": "time", "key": key})
-    status, body = fetch(f"https://www.googleapis.com/youtube/v3/commentThreads?{q}")
-    if status != 200:
-        msg = ""
-        try:
-            msg = json.loads(body).get("error", {}).get("message", "")
-        except Exception:
-            pass
-        log(f"{label}: HTTP {status} {msg[:80]}")
-        return []
+    threads, page = [], ""
+    for _ in range(5):  # up to 250 threads a run; newest first
+        status, body = fetch(f"https://www.googleapis.com/youtube/v3/commentThreads?{q}"
+                             + (f"&pageToken={page}" if page else ""))
+        if status != 200:
+            msg = ""
+            try:
+                msg = json.loads(body).get("error", {}).get("message", "")
+            except Exception:
+                pass
+            log(f"{label}: HTTP {status} {msg[:80]}")
+            break
+        data = json.loads(body)
+        threads += data.get("items", [])
+        page = data.get("nextPageToken", "")
+        if not page:
+            break
     items = []
-    for t in json.loads(body).get("items", []):
+    for t in threads:
         top = t["snippet"]["topLevelComment"]["snippet"]
-        ours = [r for r in t.get("replies", {}).get("comments", [])
-                if r["snippet"].get("authorChannelId", {}).get("value") == channel_id]
+        replies = t.get("replies", {}).get("comments", [])
+        mine = lambda c: c["snippet"].get("authorChannelId", {}).get("value") == channel_id
+        ours = [r for r in replies if mine(r)]
         if top.get("authorChannelId", {}).get("value") == channel_id:
-            continue  # our own comment
+            others = [r for r in replies if not mine(r)]
+            if not others:
+                continue  # our own comment, nobody answered it
+            last = max(replies, key=lambda r: r["snippet"].get("publishedAt", ""))
+            if mine(last):
+                continue  # we already answered the latest reply
+            top = others[-1]["snippet"]  # surface the viewer's reply
+            ours = []
         items.append({
             "id": "yt:" + t["id"],
             "source": label,
@@ -182,7 +198,8 @@ def flag(item: dict, keywords: list[str]) -> str | None:
 
 # --- drafting ---------------------------------------------------------------------------------------
 
-def draft_replies(product: str, flagged: list[dict], brief_path: Path | None) -> dict[str, str]:
+def draft_replies(product: str, flagged: list[dict], brief_path: Path | None) -> dict[str, str] | None:
+    """None means drafting failed: the caller keeps the items unseen so the next run retries."""
     """One `claude -p` call per product for all its flagged items. Returns id -> draft."""
     if not flagged:
         return {}
@@ -208,10 +225,13 @@ Answer with JSON only: {{"<id>": "<draft reply or SKIP>", ...}}"""
         out = subprocess.run(["claude", "-p", "--model", "sonnet", "--output-format", "text"],
                              input=prompt, capture_output=True, text=True, timeout=600)
         m = re.search(r"\{.*\}", out.stdout, re.S)
-        return json.loads(m.group(0)) if m else {}
+        if out.returncode != 0 or not m:
+            log(f"drafting failed for {product}: exit {out.returncode}")
+            return None
+        return json.loads(m.group(0))
     except Exception as e:
         log(f"drafting failed for {product}: {type(e).__name__}")
-        return {}
+        return None
 
 
 # --- main ---------------------------------------------------------------------------------------------
@@ -273,6 +293,10 @@ def main() -> int:
                 flagged.append(it)
         drafts = draft_replies(product, flagged, Path(os.path.expanduser(p["brief"])) if p.get("brief") else None) \
             if args.draft else {}
+        if drafts is None:
+            for it in flagged:  # retry these next run
+                seen.pop(f"{product}|{it['id']}", None)
+            drafts = {}
 
         totals["new"] += len(new)
         totals["flagged"] += len(flagged)
@@ -298,7 +322,7 @@ def main() -> int:
             lines += ["", "Also new, not flagged: " + ", ".join(f"{n} in {s}" for s, n in by_src.items())]
         sections.append("\n".join(lines))
 
-    out_path = ROOT / "digest" / f"{today}.md"
+    out_path = ROOT / "digest" / (f"{today}.dry-run.md" if args.dry_run else f"{today}.md")
     out_path.parent.mkdir(parents=True, exist_ok=True)
     summary = f"{totals['flagged']} need you, {totals['new']} new in total."
     body = "\n\n".join(sections) + "\n"

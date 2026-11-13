@@ -21,6 +21,7 @@ if [ -n "$id" ] && [ -n "$secret" ]; then
   fi
 fi
 [ -z "$out" ] && out=$("${DIGEST[@]}" 2>>state/digest.log)
-n=$(grep -E "need you" "$out" 2>/dev/null | tail -1 | sed -E 's/^# (Later run [0-9:]+: )?//')
-/usr/bin/osascript -e "display notification \"${n:-digest written}\" with title \"Marketing digest\"" 2>/dev/null
+# Only the generated summary line (digits only), never post text; passed to AppleScript as an argument, not code.
+n=$(grep -Eo '^(# Later run [0-9]{2}:[0-9]{2}: )?[0-9]+ need you, [0-9]+ new in total\.$' "$out" 2>/dev/null | tail -1 | grep -Eo '[0-9]+ need you, [0-9]+ new in total\.')
+/usr/bin/osascript -e 'on run argv' -e 'display notification (item 1 of argv) with title "Marketing digest"' -e 'end run' "${n:-digest written}" 2>/dev/null
 log "$out $n"
