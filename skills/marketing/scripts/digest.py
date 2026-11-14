@@ -275,6 +275,7 @@ def main() -> int:
                 {"q": q, "sort": "new", "t": "week"}), f"Reddit search “{q}”")
         for f in p.get("private_feeds", []):
             # e.g. a Reddit account's private inbox RSS; the URL holds a token, so it lives in the Keychain
+            time.sleep(REDDIT_PAUSE_S)  # same pacing as the other Reddit feeds
             url = keychain(f["key_account"])
             if not url:
                 SOURCE_ERRORS.append(f"{f['label']}: no feed URL in Keychain, NOT checked")
