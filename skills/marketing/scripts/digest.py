@@ -203,18 +203,23 @@ def flag(item: dict, keywords: list[str]) -> str | None:
 
 # --- drafting ---------------------------------------------------------------------------------------
 
-def draft_replies(product: str, flagged: list[dict], brief_path: Path | None) -> dict[str, str] | None:
+def draft_replies(product: str, flagged: list[dict], brief_path: Path | None,
+                  place_rules: dict[str, str] | None = None) -> dict[str, str] | None:
     """None means drafting failed: the caller keeps the items unseen so the next run retries."""
     """One `claude -p` call per product for all its flagged items. Returns id -> draft."""
     if not flagged:
         return {}
     voice = (SKILL / "references" / "voice.md").read_text()
     brief = brief_path.read_text() if brief_path and brief_path.exists() else "(no brief)"
-    items = [{"id": i["id"], "where": i["source"], "title": i["title"], "text": i["text"]} for i in flagged]
+    place_rules = place_rules or {}
+    items = [{"id": i["id"], "where": i["source"], "title": i["title"], "text": i["text"],
+              "rules_there": place_rules.get(i["source"], "unknown: do not mention the product")} for i in flagged]
     prompt = f"""You draft short replies for the owner of {product}, who will edit and post them by hand.
 Follow the voice guide and the product brief exactly. Only claim what the brief allows. Never pretend to be
 a user. If the product is relevant, mention it once with "I made" (disclosure). If a reply would be
 self-promotion where it isn't wanted, or nothing useful can be said, answer SKIP for that item.
+Each item carries "rules_there": the place's own rules. They override everything: where self-promotion is
+banned, never mention the product (a purely helpful reply is fine, or SKIP).
 
 VOICE GUIDE:
 {voice}
@@ -296,7 +301,8 @@ def main() -> int:
             if why:
                 it["why"] = why
                 flagged.append(it)
-        drafts = draft_replies(product, flagged, Path(os.path.expanduser(p["brief"])) if p.get("brief") else None) \
+        drafts = draft_replies(product, flagged, Path(os.path.expanduser(p["brief"])) if p.get("brief") else None,
+                               p.get("place_rules")) \
             if args.draft else {}
         if drafts is None:
             for it in flagged:  # retry these next run
