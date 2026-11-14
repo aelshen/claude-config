@@ -273,6 +273,15 @@ def main() -> int:
             time.sleep(REDDIT_PAUSE_S)
             items += reddit_feed("https://www.reddit.com/search.rss?" + urllib.parse.urlencode(
                 {"q": q, "sort": "new", "t": "week"}), f"Reddit search “{q}”")
+        for f in p.get("private_feeds", []):
+            # e.g. a Reddit account's private inbox RSS; the URL holds a token, so it lives in the Keychain
+            url = keychain(f["key_account"])
+            if not url:
+                SOURCE_ERRORS.append(f"{f['label']}: no feed URL in Keychain, NOT checked")
+                continue
+            for it in reddit_feed(url, f["label"]):
+                it["own_channel"] = True  # replies and messages to us
+                items.append(it)
         for ch in p.get("youtube_channels", []):
             items += youtube_comments(ch["id"], ch.get("key_env"), ch.get("key_account"),
                                       f"YouTube {ch.get('handle', ch['id'])}")
