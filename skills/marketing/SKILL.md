@@ -45,6 +45,7 @@ plan and added the content, licensing and store rules below.
 | Each product's brief | `marketing/BRIEF.md` in the product's repo, owned by that repo's session. Template: `references/brief.md` |
 | Accounts, posts, outreach, results | `~/Work/marketing/` (one private folder for every product): `accounts.md`, `log.tsv`, `packets/` |
 | Video and image templates | the `promo-assets` skill (vertical short template per brand) |
+| The owner's own writing (voice reference) | `~/Work/marketing/voice-samples/*.md` (private; the digest's drafter reads them too) |
 | Logins | the owner's password manager / Keychain. Never in a file, never in a chat, never on screen in a screenshot |
 
 ## The weekly loop (2 to 4 owner-hours)

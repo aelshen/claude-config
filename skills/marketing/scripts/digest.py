@@ -210,6 +210,10 @@ def draft_replies(product: str, flagged: list[dict], brief_path: Path | None,
     if not flagged:
         return {}
     voice = (SKILL / "references" / "voice.md").read_text()
+    samples_dir = ROOT / "voice-samples"
+    if samples_dir.is_dir():  # the owner's own writing: the real reference (private, outside repos)
+        for f in sorted(samples_dir.glob("*.md"))[:4]:
+            voice += f"\n\nOWNER'S OWN WRITING ({f.stem}):\n" + f.read_text()[:6000]
     brief = brief_path.read_text() if brief_path and brief_path.exists() else "(no brief)"
     place_rules = place_rules or {}
     items = [{"id": i["id"], "where": i["source"], "title": i["title"], "text": i["text"],
