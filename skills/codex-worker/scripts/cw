@@ -59,7 +59,7 @@ def locked(job_id):
     # A separate inode stays locked across atomic replacements of the JSON. An id with neither a ledger nor a
     # reserved lock is unknown: refuse it rather than leave a stray lock file behind.
     path = ledger(job_id).with_suffix(".lock")
-    if not re.fullmatch(r"[a-z0-9_-]+", job_id) or not (path.exists() or ledger(job_id).exists()):
+    if not (path.exists() or ledger(job_id).exists()):
         raise JobError(f"unknown job: {job_id}")
     with path.open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
