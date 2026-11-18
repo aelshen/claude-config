@@ -473,6 +473,13 @@ class WorkerCLI(unittest.TestCase):
         self.assertIn("sandbox_workspace_write.network_access=false",
                       [argv[i + 1] for i, arg in enumerate(argv) if arg == "-c"])
 
+    def test_unknown_ids_leave_no_lock_files(self):
+        for command in (("kill",), ("status",), ("clean",), ("resume",)):
+            args = [*command, "no-such-job"] + (["hi"] if command == ("resume",) else [])
+            self.assertIn("unknown job", self.cw(*args, code=1).stderr)
+        self.assertIn("invalid job id", self.cw("kill", "../escape", code=1).stderr)
+        self.assertEqual(sorted(p.name for p in Path(self.env["CW_HOME"]).glob("*.lock")), [])
+
     def test_collect_refuses_checks_while_the_worker_runs(self):
         self.env["FAKE_CODEX_BEHAVIOR"] = "sleep"
         job_id = self.start("--timeout", "30s")
