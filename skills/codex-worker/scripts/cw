@@ -87,14 +87,13 @@ def git(repo, *args, check=True):
 
 
 def check_scope(repo):
-    if (Path(repo) / ".github/codex-review.env").is_file():
-        # Use the review script's shell settings from the caller's source checkout.
-        scope = subprocess.run(
-            ["bash", "-euc", 'CODEX_SCOPE=all CODEX_PATHS="" CODEX_EXCLUDE=""\n'
-             '. .github/codex-review.env >&2\nprintf %s "$CODEX_SCOPE"'],
-            cwd=repo, capture_output=True, text=True, check=True)
-        if scope.stdout == "off":
-            raise JobError(f"CODEX_SCOPE=off in {repo}/.github/codex-review.env")
+    """Refuse a repo whose .github/codex-review.env says CODEX_SCOPE=off. Parsed as text, never sourced: no repo code runs."""
+    env = Path(repo) / ".github/codex-review.env"
+    if env.is_file():
+        for line in env.read_text(errors="replace").splitlines():
+            m = re.match(r"""\s*(?:export\s+)?CODEX_SCOPE\s*=\s*["']?([^"'#\s]*)""", line)
+            if m and m.group(1) == "off":
+                raise JobError(f"CODEX_SCOPE=off in {env}")
 
 
 def prefetch(repo, scratch, items):
@@ -416,38 +415,12 @@ def start(args):
         raise
 
 
-def migrate_outputs(job):
-    directory = STATE_DIR / job["id"]
-    if Path(job["events_path"]).parent == directory:
-        return
-    # Older ledgers stored streams in worker-writable scratch. Copy regular files
-    # under the ledger lock, without following links in the directory or its entries.
-    directory.mkdir(mode=0o700, exist_ok=True)
-    scratch = os.open(Path(job["worktree"]) / ".cw", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-    try:
-        for name in ("events.jsonl", "stderr.log", "last.md"):
-            try:
-                fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=scratch)
-            except FileNotFoundError:
-                continue
-            with os.fdopen(fd, "rb") as source:
-                if not stat.S_ISREG(os.fstat(fd).st_mode):
-                    raise JobError(f"expected a regular .cw/{name}")
-                with (directory / name).open("wb") as target:
-                    shutil.copyfileobj(source, target)
-    finally:
-        os.close(scratch)
-    job.update(result_path=str(directory / "last.md"), events_path=str(directory / "events.jsonl"))
-    save(job)
-
-
 def resume(args):
     with locked(args.id):
         job = refresh(args.id)
         if job["status"] in ("running", "cleaned"):
             raise JobError(f"{args.id} is {job['status']}")
         check_scope(job["repo"])
-        migrate_outputs(job)
     launch(job, {"message": args.message, "timeout": args.timeout})
 
 
@@ -585,6 +558,8 @@ def collect(args):
         print(git(wt, *options).stdout, end="")
     show_pulls(job, output)
     if args.test is not None:
+        if job["status"] == "running":
+            raise JobError(f"{args.id} is still running: wait for it before running checks on its worktree")
         with subprocess.Popen(args.test, cwd=wt, shell=True, stdin=subprocess.DEVNULL,
                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
                               errors="replace") as run:

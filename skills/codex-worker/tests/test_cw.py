@@ -473,32 +473,21 @@ class WorkerCLI(unittest.TestCase):
         self.assertIn("sandbox_workspace_write.network_access=false",
                       [argv[i + 1] for i, arg in enumerate(argv) if arg == "-c"])
 
-    def test_resume_migrates_legacy_streams(self):
-        job_id = self.start()
-        self.finished(job_id)
-        job = self.ledger(job_id)
-        scratch = Path(job["worktree"]) / ".cw"
-        directory = self.home / job_id
-        for name in ("events.jsonl", "stderr.log", "last.md"):
-            (directory / name).rename(scratch / name)
-        directory.rmdir()
-        job.update(result_path=str(scratch / "last.md"), events_path=str(scratch / "events.jsonl"))
-        (self.home / (job_id + ".json")).write_text(json.dumps(job))
-        original = (scratch / "events.jsonl").read_bytes()
-        # A legacy output replaced by a link cannot become a host-managed stream.
-        (scratch / "events.jsonl").unlink()
-        (scratch / "events.jsonl").symlink_to(self.brief)
-        self.cw("resume", job_id, "Refuse unsafe history", code=1)
-        self.assertEqual(len(self.records()), 1)
-        self.assertEqual(self.ledger(job_id), job)
-        (scratch / "events.jsonl").unlink()
-        (scratch / "events.jsonl").write_bytes(original)
-        self.cw("resume", job_id, "Continue the older job")
-        self.finished(job_id)
-        self.assertEqual((scratch / "events.jsonl").read_bytes(), original)
-        self.assertTrue((directory / "events.jsonl").read_bytes().startswith(original))
-        self.assertEqual((directory / "stderr.log").read_text().count("fixture stderr"), 2)
-        self.assertEqual(self.status(job_id)["summary"], "follow-up fixture report")
+    def test_collect_refuses_checks_while_the_worker_runs(self):
+        self.env["FAKE_CODEX_BEHAVIOR"] = "sleep"
+        job_id = self.start("--timeout", "30s")
+        self.wait_for(lambda: self.records())
+        refused = self.cw("collect", job_id, "--test", "true", code=1)
+        self.assertIn("still running", refused.stderr)
+        self.cw("kill", job_id)
+
+    def test_repo_opt_out_is_read_without_running_the_file(self):
+        policy = self.repo / ".github/codex-review.env"
+        policy.parent.mkdir()
+        marker = self.root / "ran"
+        policy.write_text(f'touch {marker}\nCODEX_SCOPE=off\n')
+        self.assertIn("CODEX_SCOPE=off", self.cw("start", self.repo, "--brief", self.brief, code=1).stderr)
+        self.assertFalse(marker.exists())
 
     def test_failed_resume_launch_preserves_previous_result(self):
         job_id = self.start()
