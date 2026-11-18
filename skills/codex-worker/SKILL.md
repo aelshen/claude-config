@@ -25,7 +25,7 @@ Use this skill's `scripts/cw`, installed at `$HOME/.claude/skills/codex-worker/s
 When you know the acceptance check, make one background Bash call in Claude Code with `run_in_background` set to `true`.
 
 ```bash
-cw run "$repo" --brief "$brief" --test "$checks"
+$HOME/.claude/skills/codex-worker/scripts/cw run "$repo" --brief "$brief" --test "$checks"
 ```
 
 The call prints the job ID and worktree, waits for the worker, then collects the result and runs the check in the worktree with the caller's access. It returns the check's exit code for a successful job or 1 for an unsuccessful job. Read the full diff and open new files yourself before committing.
