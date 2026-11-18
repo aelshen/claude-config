@@ -352,12 +352,15 @@ def launch(job, request):
         if answer != "ready":
             watcher.wait()
             raise JobError(answer or f"watchdog failed to launch (see {log})")
+
+
+def show_launch(job):
     print(job["id"])
     print(f"worktree {job['worktree']}")
-    print(f"ledger {ledger(job['id'])}")
+    print(f"ledger {ledger(job['id'])}", flush=True)
 
 
-def start(args):
+def start_job(args):
     contents = Path(args.brief).expanduser().read_bytes()
     directory = Path(args.repo_dir).expanduser().resolve()
     top = git(directory, "rev-parse", "--show-toplevel", check=False)
@@ -417,6 +420,11 @@ def start(args):
                 remove_worktree(job)
             ledger(job_id).with_suffix(".lock").unlink(missing_ok=True)
         raise
+    return job
+
+
+def start(args):
+    show_launch(start_job(args))
 
 
 def resume(args):
@@ -426,6 +434,7 @@ def resume(args):
             raise JobError(f"{args.id} is {job['status']}")
         check_scope(job["repo"])
     launch(job, {"message": args.message, "timeout": args.timeout})
+    show_launch(job)
 
 
 def result(job):
@@ -575,6 +584,28 @@ def collect(args):
         return run.returncode if run.returncode >= 0 else 128 - run.returncode
 
 
+def run(args):
+    job = start_job(args)
+    args.id = job["id"]
+    previous_int = signal.signal(signal.SIGINT, signal.default_int_handler)
+    previous_term = signal.signal(signal.SIGTERM, signal.default_int_handler)
+    try:
+        show_launch(job)
+        wait_code = wait(args)
+    except KeyboardInterrupt:
+        print(f"{args.id} still running: cw wait {args.id}", file=sys.stderr)
+        return 130
+    finally:
+        signal.signal(signal.SIGINT, previous_int)
+        signal.signal(signal.SIGTERM, previous_term)
+
+    if wait_code == 2:
+        return wait_code
+    sys.stdout.flush()
+    collect_code = collect(args)
+    return wait_code or collect_code
+
+
 def kill(args):
     with locked(args.id):
         job = refresh(args.id)
@@ -617,11 +648,7 @@ def prefetch_item(value):
     return value
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    sub = parser.add_subparsers(dest="command", required=True,
-                                metavar="{start,status,wait,resume,collect,kill,clean}")
-    p = sub.add_parser("start", help="launch a new job")
+def add_start_arguments(p):
     p.add_argument("repo_dir")
     p.add_argument("--brief", required=True, metavar="FILE")
     p.add_argument("--mode", choices=("build", "review", "triage"), default="build")
@@ -632,6 +659,17 @@ def main():
     p.add_argument("--model", default=os.environ.get("CW_MODEL") or None)
     p.add_argument("--prefetch", type=prefetch_item, nargs="+", metavar="pr:N|issue:N")
     p.add_argument("--name")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    sub = parser.add_subparsers(dest="command", required=True,
+                                metavar="{start,run,status,wait,resume,collect,kill,clean}")
+    add_start_arguments(sub.add_parser("start", help="launch a new job"))
+    p = sub.add_parser("run", help="start a job, wait for it, and collect its result")
+    add_start_arguments(p)
+    p.add_argument("--max", type=int, metavar="SECONDS", help="maximum wait (default: job timeout plus 60 seconds)")
+    p.add_argument("--test", metavar="CMD", help="run this command in the finished worktree")
     p = sub.add_parser("status", help="show jobs, or the details of one job")
     p.add_argument("id", nargs="?")
     p.add_argument("--json", action="store_true")
@@ -649,9 +687,11 @@ def main():
         sub.add_parser(name, help=help_text).add_argument("id")
     sub.add_parser("_watch").add_argument("id")
     args = parser.parse_args()
-    if args.command == "wait" and args.max < 0:
+    if args.command == "run" and args.max is None:
+        args.max = args.timeout + 60
+    if args.command in ("run", "wait") and args.max < 0:
         parser.error("--max must be zero or more seconds")
-    commands = dict(start=start, status=status, wait=wait, resume=resume,
+    commands = dict(start=start, run=run, status=status, wait=wait, resume=resume,
                     collect=collect, kill=kill, clean=clean, _watch=watch)
     STATE_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
     return commands[args.command](args)

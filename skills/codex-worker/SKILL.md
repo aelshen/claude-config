@@ -22,6 +22,18 @@ Report           Summarize changes, test results and open questions.
 
 Use this skill's `scripts/cw`, installed at `$HOME/.claude/skills/codex-worker/scripts/cw`.
 
+When you know the acceptance check, make one background Bash call in Claude Code with `run_in_background` set to `true`.
+
+```bash
+cw run "$repo" --brief "$brief" --test "$checks"
+```
+
+The call prints the job ID and worktree, waits for the worker, then collects the result and runs the check in the worktree with the caller's access. It returns the check's exit code for a successful job or 1 for an unsuccessful job. Read the full diff and open new files yourself before committing.
+
+The wait limit (`--max SECONDS`) defaults to the job timeout plus 60 seconds. If the wait reaches that limit (exit 2) or is interrupted (exit 130), use the printed ID with `cw wait "$id"`, then collect the result.
+
+For longer jobs and follow-ups, use the individual commands.
+
 1. Write the brief. Run `cw start "$repo" --brief "$brief" --mode build`. Save the printed ID and worktree path. Add `--prefetch pr:12 issue:34` to put GitHub context in `.cw/` before launch.
 2. Use a Claude Code Monitor on `cw wait "$id" --max 3600`. Never use a sleep loop. Exit 0 means done, 1 means unsuccessful, and 2 means still running at the limit. Inspect a job with `cw status "$id"` or stop its process group with `cw kill "$id"`. Kill reports `stale` if it cannot verify that the job's watchdog owns the worker.
 3. Run `cw collect "$id"` to read the result and see which files changed. Inspect the full diff and open the new files, including scripts and tests the acceptance command will execute. Once you approve those changes, run `cw collect "$id" --test "$checks"`. The command runs in the worktree with the caller's access. Read the last 30 test lines and the exit code.

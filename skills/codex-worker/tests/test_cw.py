@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import shlex
+import signal
 import subprocess
 import sys
 import tempfile
@@ -330,6 +331,63 @@ class WorkerCLI(unittest.TestCase):
         self.assertEqual(self.ledger(job_id)["status"], "cleaned")
         self.assertNotEqual(self.git(self.repo, "show-ref", "--verify", f"refs/heads/cw/{job_id}",
                                      check=False).returncode, 0)
+
+    def test_run_prints_launch_status_result_and_test_tail(self):
+        self.env["FAKE_CODEX_EDIT"] = "1"
+        check = shlex.join([sys.executable, "-c", "for i in range(30): print(f'check {i}')"])
+        proc = self.cw("run", self.repo, "--brief", self.brief, "--name", "one call",
+                       "--max", "2", "--test", check + " && cat tracked.txt")
+        lines = proc.stdout.splitlines()
+        job_id = lines[0]
+        job = self.ledger(job_id)
+        self.assertEqual(job["name"], "one call")
+        self.assertEqual(lines[1:3], [f"worktree {job['worktree']}", f"ledger {self.home / (job_id + '.json')}"])
+        self.assertEqual(lines[3].split(), ["id", job_id])
+        self.assertRegex(proc.stdout, r"(?m)^status\s+done$")
+        self.assertIn('"summary": "first fixture report"', proc.stdout)
+        self.assertNotIn("check 1", lines)
+        self.assertEqual(lines[-31:], [f"check {i}" for i in range(2, 30)] +
+                         ["base", "worker change", "Test exit code: 0"])
+
+    def test_run_collects_both_outcomes_and_preserves_failure_codes(self):
+        for behavior, code in (("success", 7), ("fail", 1)):
+            with self.subTest(behavior=behavior):
+                self.env["FAKE_CODEX_BEHAVIOR"] = behavior
+                proc = self.cw("run", self.repo, "--brief", self.brief, "--max", "2",
+                               "--test", "exit 7", code=code)
+                self.assertIn("Test exit code: 7", proc.stdout)
+
+    def test_run_at_wait_limit_leaves_job_running(self):
+        self.env["FAKE_CODEX_BEHAVIOR"] = "sleep"
+        proc = self.cw("run", self.repo, "--brief", self.brief, "--timeout", "30s",
+                       "--max", "0", "--test", "touch check-ran", code=2)
+        job_id = proc.stdout.splitlines()[0]
+        self.assertRegex(proc.stdout, r"(?m)^status\s+running$")
+        self.assertNotIn("git status --short", proc.stdout)
+        self.wait_for(self.records)
+        job = self.status(job_id)
+        self.assertEqual(job["status"], "running")
+        self.assertFalse((Path(job["worktree"]) / "check-ran").exists())
+        self.cw("kill", job_id)
+        self.assert_gone(job["pid"])
+
+    def test_interrupted_run_prints_wait_command_and_leaves_job_running(self):
+        self.env["FAKE_CODEX_BEHAVIOR"] = "sleep"
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            with self.subTest(sig=sig), subprocess.Popen(
+                [CW, "run", self.repo, "--brief", self.brief, "--timeout", "10s"],
+                cwd=self.root, env=self.env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+            ) as caller:
+                job_id = caller.stdout.readline().strip()
+                self.assertTrue(caller.stdout.readline().startswith("worktree "))
+                self.assertTrue(caller.stdout.readline().startswith("ledger "))
+                caller.send_signal(sig)
+                message, _ = caller.communicate(timeout=5)
+                self.assertEqual(caller.returncode, 130, message)
+                self.assertIn(f"still running: cw wait {job_id}", message)
+                self.wait_for(lambda: self.ledger(job_id)["session_id"])
+                self.assertEqual(self.status(job_id)["status"], "running")
+                self.cw("kill", job_id)
 
     def test_mode_defaults_completed_status_and_wait(self):
         job_ids = []
