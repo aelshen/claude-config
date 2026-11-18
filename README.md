@@ -35,6 +35,7 @@ For per-project use instead, copy `CLAUDE.md` into the project root.
 | `agents/` | The sub-agents described below, each pinned to a model tier |
 | `budget/` | Status line + hooks that show Claude its context use and plan limits |
 | `skills/session-handoff/` | Writes resume notes; the budget rules call it |
+| `skills/codex-worker/` | Hands a brief to Codex in a background worktree, tracks the job, and resumes the same session for follow-ups |
 | `skills/review-cleanup/` | Code review and cleanup: a deterministic tool sweep, parallel `review-finder`s per slice, a `review-verifier` per finding, ranked report, then behaviour-preserving cleanup in worktrees on approval. Built from an October 2026 survey of agentic review (`references/research.md`) |
 | `skills/project-tracking/` | One GitHub issue-and-board standard for every repo: issue forms, labels, a Projects board with Priority, a CI check that every PR links an issue, a shared `board.sh` (with `sync` to fix drift) and `audit.sh` to score or set up a repo |
 | `skills/observability/` | One logging, tracing and error-reporting standard on OpenTelemetry: JSON log lines with trace ids, request and model-call spans, Sentry for crashes, vendor chosen by environment variables; Python and Node references, a collector config, and adoption briefs |

@@ -1,0 +1,23 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["status", "summary", "files_changed", "tests", "open_questions", "commits"],
+  "properties": {
+    "status": {"type": "string", "enum": ["done", "blocked", "partial"]},
+    "summary": {"type": "string"},
+    "files_changed": {"type": "array", "items": {"type": "string"}},
+    "tests": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cmd", "passed", "failed", "blocked_by_sandbox"],
+      "properties": {
+        "cmd": {"type": "string"},
+        "passed": {"type": "integer"},
+        "failed": {"type": "integer"},
+        "blocked_by_sandbox": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "open_questions": {"type": "array", "items": {"type": "string"}},
+    "commits": {"type": "array", "items": {"type": "string"}}
+  }
+}
