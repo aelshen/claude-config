@@ -1,0 +1,664 @@
+#!/usr/bin/env python3
+"""Run a Codex job in a worktree and keep its ledger outside the repository."""
+
+import argparse
+from collections import deque
+from contextlib import contextmanager, suppress
+import fcntl
+from itertools import islice
+import json
+import os
+from pathlib import Path
+import re
+import secrets
+import shlex
+import shutil
+import signal
+import stat
+import subprocess
+import sys
+import tempfile
+import time
+import uuid
+
+
+SCRIPT = Path(__file__).resolve()
+SCHEMA = SCRIPT.parents[1] / "assets/result.schema.json"
+STATE_DIR = Path(os.environ.get("CW_HOME") or Path.home() / ".claude/state/codex-jobs").expanduser().resolve()
+PROMPT = "Read .cw/BRIEF.md and do the task it describes."
+FOOTER = ("Do not run git commands that change state; the caller commits. "
+          "You have no network: anything you need from GitHub is in .cw/. "
+          "Finish by writing the result object.")
+
+
+class JobError(Exception):
+    pass
+
+
+def ledger(job_id):
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", job_id):
+        raise JobError(f"invalid job id: {job_id}")
+    return STATE_DIR / (job_id + ".json")
+
+
+def reserve_id(repo):
+    prefix = re.sub(r"[^a-z0-9_-]+", "-", repo.name.lower()).strip("-_")[:40] or "repo"
+    while True:
+        job_id = f"{prefix}-{secrets.token_hex(2)}"
+        path = ledger(job_id)
+        if not path.exists() and not (STATE_DIR / job_id).exists():
+            try:
+                path.with_suffix(".lock").touch(mode=0o600, exist_ok=False)
+                return job_id
+            except FileExistsError:
+                continue
+
+
+@contextmanager
+def locked(job_id):
+    # A separate inode stays locked across atomic replacements of the JSON.
+    with ledger(job_id).with_suffix(".lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        yield
+
+
+def save(job):
+    path = ledger(job["id"])
+    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=STATE_DIR, prefix=".", delete=False) as tmp:
+        try:
+            json.dump(job, tmp, indent=2, ensure_ascii=False)
+            tmp.write("\n")
+            tmp.flush()
+            os.replace(tmp.name, path)
+        finally:
+            Path(tmp.name).unlink(missing_ok=True)
+
+
+def read(job_id):
+    try:
+        return json.loads(ledger(job_id).read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        raise JobError(f"unknown job: {job_id}") from None
+
+
+def git(repo, *args, check=True):
+    return subprocess.run(["git", "-C", repo, *args], check=check, capture_output=True,
+                          text=True, errors="replace")
+
+
+def check_scope(repo):
+    """Refuse a repo whose .github/codex-review.env says CODEX_SCOPE=off. Parsed as text, never sourced: no repo code runs."""
+    env = Path(repo) / ".github/codex-review.env"
+    if env.is_file():
+        for line in env.read_text(errors="replace").splitlines():
+            m = re.match(r"""\s*(?:export\s+)?CODEX_SCOPE\s*=\s*["']?([^"'#\s]*)""", line)
+            if m and m.group(1) == "off":
+                raise JobError(f"CODEX_SCOPE=off in {env}")
+
+
+def prefetch(repo, scratch, items):
+    if not items:
+        return
+    gh = ["gh"]
+    if os.environ.get("GH_REPO") or len(git(repo, "remote").stdout.splitlines()) > 1:
+        origin = git(repo, "remote", "get-url", "origin").stdout.strip()
+        gh.extend(["-R", re.sub(r"^(https?://)[^/]*@", r"\1", origin)])
+    for item in items:
+        kind, number = item.split(":")
+        fields = "title,body,comments" + (",headRefName" if kind == "pr" else "")
+        with (scratch / f"{kind}-{number}.md").open("wb") as output:
+            subprocess.run([*gh, kind, "view", number, "--json", fields],
+                           cwd=repo, stdout=output, check=True)
+        if kind == "pr":
+            with (scratch / f"pr-{number}.diff").open("wb") as output:
+                subprocess.run([*gh, "pr", "diff", number], cwd=repo, stdout=output, check=True)
+
+
+def remove_worktree(job):
+    repo, branch = job["repo"], job["branch"]
+    worktree = job["worktree"]
+    removed = git(repo, "worktree", "remove", "--force", worktree, check=False)
+    if removed.returncode:
+        # Allow a retry after an interrupted clean removed the tree but didn't update the ledger.
+        entries = git(repo, "worktree", "list", "--porcelain", "-z").stdout.split("\0")
+        if os.path.lexists(worktree) or "worktree " + worktree in entries:
+            removed.check_returncode()
+    ref = "refs/heads/" + branch
+    if branch == "cw/" + job["id"] and not git(repo, "show-ref", "--verify", "-q", ref, check=False).returncode:
+        merged = git(repo, "merge-base", "--is-ancestor", ref, job["base"], check=False)
+        if merged.returncode or git(repo, "branch", "-d", "--", branch, check=False).returncode:
+            print(f"Kept branch {branch}. Check its merge into {job['base']}.", file=sys.stderr)
+    with suppress(FileNotFoundError):
+        shutil.rmtree(STATE_DIR / job["id"])
+
+
+def events(job, limit=None):
+    try:
+        with Path(job["events_path"]).open(encoding="utf-8", errors="replace") as stream:
+            for line in islice(stream, limit):
+                try:
+                    event = json.loads(line)
+                except json.JSONDecodeError:
+                    continue  # A writer can still be finishing this line.
+                if isinstance(event, dict):
+                    yield event
+    except FileNotFoundError:
+        return
+
+
+def session_id(job):
+    fallback = None
+    for event in events(job, 32):
+        for data in (event, event.get("payload"), event.get("thread"), event.get("session")):
+            if not isinstance(data, dict):
+                continue
+            for key in ("thread_id", "session_id", "id"):
+                value = data.get(key)
+                if isinstance(value, str):
+                    try:
+                        parsed = str(uuid.UUID(value))
+                    except ValueError:
+                        continue
+                    if key != "id":
+                        return parsed
+                    if fallback is None and not str(event.get("type", "")).startswith("item."):
+                        fallback = parsed
+    return fallback
+
+
+def worker_alive(pid):
+    if not pid or pid <= 1:
+        return False
+    try:
+        # On macOS getpgid() loses sight of an exited child before its parent reaps it.
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        pass
+    return True
+
+
+def watchdog_owns_worker(job):
+    def ps(pid, field):
+        return subprocess.check_output(["ps", "-ww", "-o", field + "=", "-p", str(pid)],
+                                       stderr=subprocess.DEVNULL, text=True, errors="replace").strip()
+
+    try:
+        # The watchdog owns one child and reaps it under the same ledger lock as kill.
+        return (ps(job["watchdog_pid"], "command").endswith(f" {SCRIPT} _watch {job['id']}") and
+                ps(job["pid"], "ppid") == str(job["watchdog_pid"]))
+    except (OSError, subprocess.CalledProcessError):
+        return False
+
+
+def finish(job, status, code):
+    job.update(status=status, exit_code=code, ended=time.time())
+    save(job)
+
+
+def refresh(job_id):
+    """Read and reconcile a ledger while holding its lock."""
+    job = read(job_id)
+    if job["status"] == "running":
+        previous = job["session_id"]
+        job["session_id"] = previous or session_id(job)
+        if not worker_alive(job["pid"]):
+            finish(job, "died", None)
+        elif not worker_alive(job["watchdog_pid"]):
+            finish(job, "stale", None)
+        elif job["session_id"] != previous:
+            save(job)
+    return job
+
+
+def snapshot(job_id):
+    with locked(job_id):
+        return refresh(job_id)
+
+
+def codex_command(job, message, resume):
+    cmd = ["codex", "exec", "--sandbox", job["sandbox"], "-C", job["worktree"]]
+    if resume:
+        cmd.append("resume")
+    if job["model"]:
+        cmd.extend(["-m", job["model"]])
+    if job["sandbox"] == "workspace-write":
+        cmd.extend(["-c", "sandbox_workspace_write.network_access=false"])
+    cmd.extend(["-c", "model_reasoning_effort=" + job["effort"], "--json",
+                "-o", job["result_path"], "--output-schema", str(SCHEMA), "--"])
+    if resume:
+        cmd.append(job["session_id"])
+    return [*cmd, message]
+
+
+def kill_group(pid):
+    try:
+        os.killpg(pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    except PermissionError:
+        # Darwin can return EPERM for a group whose last member just exited.
+        try:
+            os.getpgid(pid)
+        except ProcessLookupError:
+            return
+        raise
+
+
+def supervise(job, child):
+    deadline = time.monotonic() + job["timeout_s"]
+    while True:
+        with locked(job["id"]):
+            current = read(job["id"])
+            if current["status"] != "running" or current["watchdog_pid"] != os.getpid():
+                break  # kill may already have been followed by resume or clean.
+            # Reap and publish under one lock so status cannot mistake a normal exit for death.
+            code = child.poll()
+            timed_out = code is None and time.monotonic() >= deadline
+            if timed_out:
+                kill_group(child.pid)
+                code = child.wait()
+            if not current["session_id"]:
+                current["session_id"] = session_id(current)
+                if current["session_id"] and code is None:
+                    save(current)
+            if code is not None:
+                status = "timed_out" if timed_out else ("done" if code == 0 else "failed")
+                finish(current, status, code)
+                return
+        time.sleep(max(0, min(0.5, deadline - time.monotonic())))
+    # If ps was unavailable, a stale ledger can still have our live child.
+    try:
+        child.wait(timeout=max(0, deadline - time.monotonic()))
+    except subprocess.TimeoutExpired:
+        kill_group(child.pid)
+        child.wait()
+
+
+def begin_attempt(job_id, request):
+    with locked(job_id):
+        resume = "job" not in request
+        if resume:
+            job = refresh(job_id)
+            if job["status"] in ("running", "cleaned"):
+                raise JobError(f"{job_id} is {job['status']}")
+            job["session_id"] = job["session_id"] or session_id(job)
+            if not job["session_id"]:
+                raise JobError(f"no Codex session UUID in {job['events_path']}")
+            if request["timeout"] is not None:
+                job["timeout_s"] = request["timeout"]
+        else:
+            job = request["job"]
+
+        last = Path(job["result_path"])
+        previous = last.with_name(f".last-{os.getpid()}")
+        if last.is_dir():
+            raise JobError(f"expected a result file at {last}")
+        with suppress(FileNotFoundError):
+            last.replace(previous)
+        child = None
+        try:
+            cmd = codex_command(job, request["message"], resume)
+            with open(job["events_path"], "a+b") as output:
+                if output.tell():
+                    output.seek(-1, os.SEEK_END)
+                    if output.read(1) != b"\n":
+                        output.write(b"\n")
+                        output.flush()
+                child = subprocess.Popen(cmd, cwd=job["worktree"], start_new_session=True,
+                                         stdin=subprocess.DEVNULL, stdout=output, stderr=sys.stderr)
+            job.update(pid=child.pid, watchdog_pid=os.getpid(), started=time.time(),
+                       ended=None, status="running", exit_code=None)
+            save(job)
+        except BaseException:
+            if child is not None:
+                kill_group(child.pid)
+                child.wait()
+            with suppress(FileNotFoundError):
+                previous.replace(last)
+            raise
+        previous.unlink(missing_ok=True)
+    return job, child
+
+
+def watch(args):
+    # The detached watchdog is Codex's parent. Only a parent can wait for its exit code.
+    try:
+        job, child = begin_attempt(args.id, json.load(sys.stdin))
+    except (JobError, OSError, ValueError) as error:
+        print(error, flush=True)
+        return 1
+    # The caller waits only for this acknowledgement, even if the job takes hours.
+    with suppress(BrokenPipeError):
+        os.write(sys.stdout.fileno(), b"ready\n")
+    supervise(job, child)
+
+
+def launch(job, request):
+    log = STATE_DIR / job["id"] / "stderr.log"
+    with log.open("ab") as errors:
+        watcher = subprocess.Popen([sys.executable, SCRIPT, "_watch", job["id"]],
+                                   start_new_session=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                   stderr=errors, text=True, encoding="utf-8")
+    with watcher.stdout as reply:
+        with watcher.stdin as pipe:
+            json.dump(request, pipe)
+        answer = reply.readline().strip()
+        if answer != "ready":
+            watcher.wait()
+            raise JobError(answer or f"watchdog failed to launch (see {log})")
+    print(job["id"])
+    print(f"worktree {job['worktree']}")
+    print(f"ledger {ledger(job['id'])}")
+
+
+def start(args):
+    contents = Path(args.brief).expanduser().read_bytes()
+    directory = Path(args.repo_dir).expanduser().resolve()
+    top = git(directory, "rev-parse", "--show-toplevel", check=False)
+    repo = directory if top.returncode else Path(top.stdout.rstrip("\n"))
+    check_scope(repo)
+    if args.branch:
+        ref = "refs/heads/" + args.branch
+        tracking = "refs/remotes/origin/" + args.branch
+        git(repo, "check-ref-format", ref)
+        git(repo, "fetch", "-q", "origin", f"+{ref}:{tracking}")
+    else:
+        git(repo, "fetch", "-q", "origin")
+    job_id = reserve_id(repo)
+    job_dir = STATE_DIR / job_id
+    worktree = repo.parent / f"cw-{repo.name}-{job_id}"
+    scratch = worktree / ".cw"
+    branch = args.branch or "cw/" + job_id
+    base = "origin/" + args.branch if args.branch else args.base
+    job = dict(id=job_id, name=args.name or job_id, repo=str(repo), worktree=str(worktree),
+               branch=branch, base=base, mode=args.mode, model=args.model,
+               effort=args.effort or ("max" if args.mode == "build" else "high"),
+               sandbox="workspace-write" if args.mode == "build" else "read-only",
+               timeout_s=args.timeout, session_id=None, brief=str(scratch / "BRIEF.md"),
+               result_path=str(job_dir / "last.md"), events_path=str(job_dir / "events.jsonl"))
+    created = False
+    advanced_to = None
+    try:
+        existing = args.branch and not git(repo, "show-ref", "--verify", "-q", ref, check=False).returncode
+        if existing:
+            git(repo, "worktree", "add", "-q", "--", worktree, branch)
+        else:
+            git(repo, "worktree", "add", "-q", "-b", branch, "--", worktree, tracking if args.branch else base)
+        created = True
+        if existing:
+            previous_tip = git(worktree, "rev-parse", "HEAD").stdout.strip()
+            target = git(repo, "rev-parse", tracking).stdout.strip()
+            if git(repo, "merge-base", "--is-ancestor", previous_tip, target, check=False).returncode:
+                raise JobError(f"refusing to reset {branch}: local commits are missing from {base}")
+            if previous_tip != target:
+                git(worktree, "merge", "--ff-only", target)
+                advanced_to = target
+        scratch.mkdir(mode=0o700)
+        (scratch / ".gitignore").write_text("*\n", encoding="utf-8")
+        separator = b"\n" if contents.endswith(b"\n") else b"\n\n"
+        Path(job["brief"]).write_bytes(contents + separator + FOOTER.encode() + b"\n")
+        prefetch(repo, scratch, args.prefetch)
+        job_dir.mkdir(mode=0o700)
+        launch(job, {"job": job, "message": PROMPT})
+    except (OSError, JobError, subprocess.CalledProcessError):
+        if not ledger(job_id).exists():
+            if created:
+                if advanced_to:
+                    # Restore only the tip this start installed, while the branch is still checked out here.
+                    restored = git(repo, "update-ref", ref, previous_tip, advanced_to, check=False)
+                    if restored.returncode:
+                        print(restored.stderr.strip(), file=sys.stderr)
+                remove_worktree(job)
+            ledger(job_id).with_suffix(".lock").unlink(missing_ok=True)
+        raise
+
+
+def resume(args):
+    with locked(args.id):
+        job = refresh(args.id)
+        if job["status"] in ("running", "cleaned"):
+            raise JobError(f"{args.id} is {job['status']}")
+        check_scope(job["repo"])
+    launch(job, {"message": args.message, "timeout": args.timeout})
+
+
+def result(job):
+    try:
+        raw = Path(job["result_path"]).read_text(encoding="utf-8", errors="replace")
+    except FileNotFoundError:
+        return None
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        return raw
+
+
+def show_job(job, as_json=False):
+    types = (e["type"] for e in events(job) if isinstance(e.get("type"), str))
+    details = dict(job, last_events=list(deque(types, maxlen=3)))
+    if job["status"] == "done":
+        output = result(job)
+        if isinstance(output, dict):
+            details["summary"] = output.get("summary", "")
+    if as_json:
+        print(json.dumps(details, indent=2, ensure_ascii=False))
+    else:
+        for key, value in details.items():
+            print(f"{key:<14} {value}")
+
+
+def age(started):
+    seconds = max(0, int(time.time() - started))
+    for unit, size in (("d", 86400), ("h", 3600), ("m", 60)):
+        if seconds >= size:
+            return f"{seconds // size}{unit}"
+    return f"{seconds}s"
+
+
+def status(args):
+    if args.id:
+        show_job(snapshot(args.id), args.json)
+        return
+    jobs = sorted((snapshot(p.stem) for p in STATE_DIR.glob("*.json")),
+                  key=lambda j: j["started"], reverse=True)
+    if args.json:
+        print(json.dumps(jobs, indent=2, ensure_ascii=False))
+        return
+    rows = [("ID", "STATUS", "AGE", "REPO", "BRANCH", "MODE")]
+    rows.extend((j["id"], j["status"], age(j["started"]), j["repo"], j["branch"], j["mode"]) for j in jobs)
+    widths = [max(map(len, column)) for column in zip(*rows)]
+    for row in rows:
+        print("  ".join(cell.ljust(width) for cell, width in zip(row, widths)).rstrip())
+
+
+def wait(args):
+    deadline = time.monotonic() + args.max
+    while True:
+        job = snapshot(args.id)
+        remaining = deadline - time.monotonic()
+        if job["status"] != "running" or remaining <= 0:
+            break
+        time.sleep(min(10, remaining))
+    show_job(job)
+    if job["status"] == "running":
+        return 2
+    return 0 if job["status"] in ("done", "cleaned") and job["exit_code"] == 0 else 1
+
+
+def artifact_paths(job, output):
+    worktree = Path(job["worktree"])
+    paths = set((worktree / ".cw").glob("*.bundle"))
+    notes = []
+    if isinstance(output, dict):
+        for key in ("commits", "notes", "summary"):
+            value = output.get(key, [])
+            notes.extend(value if isinstance(value, list) else [value])
+    elif isinstance(output, str):
+        notes.append(output)
+    for note in notes:
+        if not isinstance(note, str):
+            continue
+        # Accept a literal path, a quoted path with spaces, or a path embedded in prose.
+        words = re.findall(r"""`[^`\n]+`|"[^"\n]+"|'[^'\n]+'|[^\s`"'<>()[\]]+""", note)
+        for word in [note, *words]:
+            word = word.strip().strip("`'\"").rstrip(".,;:")
+            if word.startswith("$HOME/"):
+                word = "~/" + word[6:]
+            try:
+                path = (worktree / Path(word).expanduser()).resolve()
+                if path in (worktree, Path(job["repo"])):
+                    continue
+                if path.is_file():
+                    with path.open("rb") as source:
+                        if source.readline(32).rstrip() in (b"# v2 git bundle", b"# v3 git bundle"):
+                            paths.add(path)
+                elif (path / ".git").exists() or ((path / "HEAD").is_file() and (path / "objects").is_dir()):
+                    paths.add(path)
+            except (ValueError, OSError, RuntimeError):
+                continue
+    return sorted(paths)
+
+
+def show_pulls(job, output):
+    for path in artifact_paths(job, output):
+        if path.is_dir():
+            heads = git(path, "show-ref", "--head", "--heads", check=False)
+        else:
+            heads = git(job["worktree"], "bundle", "list-heads", path, check=False)
+        if heads.returncode:
+            print(f"Cannot read refs from {path}: {heads.stderr.strip()}", file=sys.stderr)
+            continue
+        tips = {name: sha for sha, name in (line.split(" ", 1) for line in heads.stdout.splitlines())}
+        branches = {name[len("refs/heads/"):]: sha for name, sha in tips.items() if name.startswith("refs/heads/")}
+        refs = list(branches)
+        if "HEAD" in tips and tips["HEAD"] not in branches.values():
+            refs.append("HEAD")
+        if not refs:
+            refs = list(tips)  # A bundle may advertise only a tag or another named ref.
+        if refs:
+            print(f"From {job['worktree']}, pull the ref containing the work:")
+            for ref in refs:
+                print(shlex.join(["git", "pull", "--ff-only", str(path), ref]))
+
+
+def collect(args):
+    job = snapshot(args.id)
+    if job["status"] == "cleaned":
+        raise JobError(f"{args.id} has been cleaned")
+    output = result(job)
+    if output is None:
+        print(f"No result at {job['result_path']}")
+    else:
+        print(output if isinstance(output, str) else json.dumps(output, indent=2, ensure_ascii=False))
+    wt = job["worktree"]
+    for options in (("status", "--short"), ("diff", "--stat")):
+        print("git", *options)
+        print(git(wt, *options).stdout, end="")
+    show_pulls(job, output)
+    if args.test is not None:
+        if job["status"] == "running":
+            raise JobError(f"{args.id} is still running: wait for it before running checks on its worktree")
+        with subprocess.Popen(args.test, cwd=wt, shell=True, stdin=subprocess.DEVNULL,
+                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                              errors="replace") as run:
+            tail = deque(run.stdout, maxlen=30)
+        sys.stdout.writelines(tail)
+        if tail and not tail[-1].endswith("\n"):
+            print()
+        print(f"Test exit code: {run.returncode}")
+        return run.returncode if run.returncode >= 0 else 128 - run.returncode
+
+
+def kill(args):
+    with locked(args.id):
+        job = refresh(args.id)
+        if job["status"] != "running":
+            raise JobError(f"{args.id} is {job['status']}")
+        if not watchdog_owns_worker(job):
+            finish(job, "stale", None)
+            raise JobError(f"{args.id} is stale: unable to verify its watchdog and worker")
+        kill_group(job["pid"])
+        finish(job, "killed", -signal.SIGKILL)
+    # Allow the watchdog to reap the child before returning to the caller.
+    deadline = time.monotonic() + 5
+    while worker_alive(job["pid"]) and time.monotonic() < deadline:
+        time.sleep(0.05)
+    print(f"{args.id} killed")
+
+
+def clean(args):
+    with locked(args.id):
+        job = refresh(args.id)
+        if job["status"] == "running":
+            raise JobError(f"{args.id} is running")
+        if job["status"] != "cleaned":
+            remove_worktree(job)
+            job["status"] = "cleaned"
+            save(job)
+    print(f"{args.id} cleaned")
+
+
+def duration(value):
+    match = re.fullmatch(r"([0-9]+)([smh]?)", value)
+    if not match or not int(match[1]):
+        raise argparse.ArgumentTypeError("use a positive duration such as 90s, 60m or 2h")
+    return int(match[1]) * {"": 1, "s": 1, "m": 60, "h": 3600}[match[2]]
+
+
+def prefetch_item(value):
+    if not re.fullmatch(r"(pr|issue):[1-9][0-9]*", value):
+        raise argparse.ArgumentTypeError("use pr:N or issue:N with a positive number")
+    return value
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    sub = parser.add_subparsers(dest="command", required=True,
+                                metavar="{start,status,wait,resume,collect,kill,clean}")
+    p = sub.add_parser("start", help="launch a new job")
+    p.add_argument("repo_dir")
+    p.add_argument("--brief", required=True, metavar="FILE")
+    p.add_argument("--mode", choices=("build", "review", "triage"), default="build")
+    p.add_argument("--branch", help="check out a named branch at origin/BRANCH")
+    p.add_argument("--base", default="origin/main")
+    p.add_argument("--effort", choices=("high", "max"))
+    p.add_argument("--timeout", type=duration, default=3600)
+    p.add_argument("--model", default=os.environ.get("CW_MODEL") or None)
+    p.add_argument("--prefetch", type=prefetch_item, nargs="+", metavar="pr:N|issue:N")
+    p.add_argument("--name")
+    p = sub.add_parser("status", help="show jobs, or the details of one job")
+    p.add_argument("id", nargs="?")
+    p.add_argument("--json", action="store_true")
+    p = sub.add_parser("wait", help="wait for a job to finish")
+    p.add_argument("id")
+    p.add_argument("--max", type=int, default=3600, metavar="SECONDS")
+    p = sub.add_parser("resume", help="send a follow-up to the same session")
+    p.add_argument("id")
+    p.add_argument("message")
+    p.add_argument("--timeout", type=duration)
+    p = sub.add_parser("collect", help="read the result and optionally run a test command")
+    p.add_argument("id")
+    p.add_argument("--test", metavar="CMD")
+    for name, help_text in (("kill", "stop a running job"), ("clean", "remove a finished worktree")):
+        sub.add_parser(name, help=help_text).add_argument("id")
+    sub.add_parser("_watch").add_argument("id")
+    args = parser.parse_args()
+    if args.command == "wait" and args.max < 0:
+        parser.error("--max must be zero or more seconds")
+    commands = dict(start=start, status=status, wait=wait, resume=resume,
+                    collect=collect, kill=kill, clean=clean, _watch=watch)
+    STATE_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+    return commands[args.command](args)
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except subprocess.CalledProcessError as error:
+        print(error.stderr.strip() if error.stderr else error, file=sys.stderr)
+        sys.exit(1)
+    except (JobError, OSError, ValueError) as error:
+        print(f"cw: {error}", file=sys.stderr)
+        sys.exit(1)
