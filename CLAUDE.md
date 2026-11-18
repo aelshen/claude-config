@@ -30,7 +30,7 @@ How it's wired: each agent's frontmatter sets its `model`/`effort`; `Explore` he
 
 **Routing rules:**
 - **A search across more than about 3 files, or any "where is / list all / what does X say" question** → `Explore` (Haiku). Fan out several in parallel for independent questions. Ask it to *locate and quote*, not to analyze or decide. Do it yourself only when you already know the file.
-- **A mechanical change at volume that's already decided** (you can name the files, the edit, and the check) → `fixer` (Haiku). Examples: a rename across 30 files, or a list of review findings. If you'd have to explain *why* or *how to approach it*, it isn't a fixer task. A single small edit is cheaper inline.
+- **A mechanical change at volume that's already decided** (you can name the files, the edit, and the check) → `fixer` (Haiku). Examples: a rename across 30 files, or a list of review findings. If you'd have to explain *why* or *how to approach it*, it isn't a fixer task. A single small edit is cheaper inline. A sweep big enough to be its own PR goes to a Codex job instead (below).
 - **A task with a goal but open details** → `implementer` (Sonnet). Give it the goal, constraints, the files it owns, and an acceptance check. Prefer it over `general-purpose`: its narrow tool list starts cheaper. Parallel implementers must own disjoint files.
 - **A build whose fix you can state** (files, change, acceptance check) → a Codex job via the `codex-worker` skill, never a hand-rolled `codex exec`. Saves Claude usage, so prefer it over `implementer` when the plan is settled. Keep on Claude what's ambiguous, money/data/security decisions, and the final diff check. A brief that only states the problem gets a weak result.
 - **Keep on Opus:** the plan, cross-cutting design, ambiguous requirements, security- or data-sensitive decisions, and reviewing subagent output before it reaches the user.
@@ -142,7 +142,7 @@ Before creating pull requests, would run:
 | Quick status check | Direct: project-manager | 1 min | 1 |
 | Find/gather across the codebase | Direct: Explore (parallel per question) | <1 min | 1-4 |
 | Apply a decided, small change | Direct: fixer, then read the diff | 1 min | 1 |
-| Build a scoped task from a plan | Direct: implementer per task (disjoint files) | 3-10 min | 1-3 |
+| Build a scoped task from a plan | Codex job via `codex-worker` when the fix is stated; implementer per task (disjoint files) when it needs judgement | 3-10 min | 1-3 |
 | Quality review or cleanup of a repo or area | `review-cleanup` skill: sweep, parallel review-finders, verify, rank; cleanup in worktrees on approval | 5-15 min | 5-10 |
 
 ### Available Custom Agents
