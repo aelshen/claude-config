@@ -24,7 +24,7 @@ Otherwise do it inline: a known file, a one-line fix, or a tightly coupled seque
 | **Opus** | Main session, `Plan` | Planning, specs, architecture, trade-offs, decomposing work, writing briefs, reviewing what came back, final answers to the user | (you), `Plan`, `ultrathink-debugger` |
 | **Sonnet** | Subagents (the default) | One scoped outcome end to end: a feature slice, a reproduced bug, a migration step, a review or verification pass | `implementer`, `general-purpose`, `oathkeeper`, `code-quality-pragmatist`, `review-finder`, `review-verifier`, `project-manager`, `workflow-orchestrator` |
 | **Haiku** | Subagents | Volume and speed: search, retrieval, reading logs/docs, listing call sites; mechanical edits at volume that are already fully specified | `Explore`, `fixer` |
-| **Codex** | `codex-worker` jobs (the `cw` script, a separate subscription) | Build work whose fix the brief already names, mechanical sweeps, triage and reviews, in its own worktree; the Claude side reads the diff, runs the checks and commits | `cw start` (skill `codex-worker`) |
+| **Codex** | `codex-worker` jobs (the `cw` script, a separate subscription) | Build work whose fix the brief already names, sweeps big enough to be their own PR (smaller in-session edits stay with `fixer`), triage and reviews, in its own worktree; the Claude side reads the diff, runs the checks and commits | `cw start` (skill `codex-worker`) |
 
 How it's wired: each agent's frontmatter sets its `model`/`effort`; `Explore` here overrides the built-in one (which would otherwise run on Opus); `CLAUDE_CODE_SUBAGENT_MODEL=sonnet` in settings makes Sonnet the default for any agent without its own model (e.g. `general-purpose`). A `model` passed on the Agent call beats all of these.
 
