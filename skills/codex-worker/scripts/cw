@@ -608,9 +608,12 @@ def run(args):
         print(f"skipping --test: job is {job['status']}" if job["status"] != "done" else
               "skipping --test: the work is in a clone or bundle; pull it, read the diff, then run the check", file=sys.stderr)
         args.test = None
+        skipped = True
+    else:
+        skipped = False
     sys.stdout.flush()
     collect_code = collect(args)
-    return wait_code or collect_code
+    return wait_code or collect_code or (1 if skipped else 0)  # a requested check that didn't run is not a pass
 
 
 def kill(args):

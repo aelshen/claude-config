@@ -355,7 +355,11 @@ class WorkerCLI(unittest.TestCase):
                 self.env["FAKE_CODEX_BEHAVIOR"] = behavior
                 proc = self.cw("run", self.repo, "--brief", self.brief, "--max", "2",
                                "--test", "exit 7", code=code)
-                self.assertIn("Test exit code: 7", proc.stdout)
+                if behavior == "success":
+                    self.assertIn("Test exit code: 7", proc.stdout)
+                else:  # a failed job's worktree is not checked
+                    self.assertNotIn("Test exit code", proc.stdout)
+                    self.assertIn("skipping --test: job is failed", proc.stderr)
 
     def test_run_at_wait_limit_leaves_job_running(self):
         self.env["FAKE_CODEX_BEHAVIOR"] = "sleep"
