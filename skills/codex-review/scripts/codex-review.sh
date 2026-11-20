@@ -11,13 +11,15 @@
 #   CODEX_SCOPE=all|risky|off     risky: review only when a changed file matches CODEX_PATHS
 #   CODEX_PATHS="supabase/* server/identity.py"   bash patterns; * also matches /
 #   CODEX_EXCLUDE="tests/golden/* app/src/i18n/*"  changes only here are never reviewed
-# Log: ${CODEX_REVIEW_STATE:-~/.claude/state/codex-review}/{runs,marks}.tsv
+# Log: ${CODEX_REVIEW_STATE:-~/.claude/state/codex-review}/{runs,marks}.tsv. Each row ends with the commit it is
+# about (runs: the commit reviewed; marks: the PR's head when it was settled), so a reader can tell a review of this
+# commit from one of an earlier push. Rows written before that have no such column.
 set -euo pipefail
 state="${CODEX_REVIEW_STATE:-$HOME/.claude/state/codex-review}"
 mkdir -p "$state"
 runs="$state/runs.tsv" marks="$state/marks.tsv"
-[ -f "$runs" ] || printf 'date\trepo\tbranch\tpr\tround\tsecs\tfindings\tp1\toutput\n' >"$runs"
-[ -f "$marks" ] || printf 'date\trepo\tpr\treal\tnoise\tnote\n' >"$marks"
+[ -f "$runs" ] || printf 'date\trepo\tbranch\tpr\tround\tsecs\tfindings\tp1\toutput\tsha\n' >"$runs"
+[ -f "$marks" ] || printf 'date\trepo\tpr\treal\tnoise\tnote\tsha\n' >"$marks"
 
 # the origin's repo name, not the checkout's folder (a worktree is named after its branch)
 repo_name() { local u; u=$(git remote get-url origin 2>/dev/null) || u=$(git rev-parse --show-toplevel); u="${u%.git}"; echo "${u##*[/:]}"; }
@@ -41,10 +43,15 @@ case "${1:-}" in
   report) shift; report "$@"; exit ;;
   mark)  # mark [-R owner/repo] <pr> <real> <noise> [note]: -R when the PR is in another repo than this checkout
     shift; name=""
-    if [ "${1:-}" = -R ]; then name="${2##*/}"; shift 2; fi
+    full=""
+    if [ "${1:-}" = -R ]; then full="$2"; name="${2##*/}"; shift 2; fi
     [ $# -ge 3 ] || { echo "usage: $0 mark [-R owner/repo] <pr> <real> <noise> [note]" >&2; exit 2; }
     name="${name:-$(repo_name)}"
-    printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$(date '+%Y-%m-%d')" "$name" "$1" "$2" "$3" "${4:-}" >>"$marks"
+    # the PR's head as it is now: what the review was settled for (empty when gh cannot say; a tab in the note
+    # would shift the column, so it becomes a space)
+    sha=$(gh pr view "$1" ${full:+-R "$full"} --json headRefOid -q .headRefOid 2>/dev/null || true)
+    note="${4:-}"
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$(date '+%Y-%m-%d')" "$name" "$1" "$2" "$3" "${note//$'\t'/ }" "$sha" >>"$marks"
     echo "marked $name #$1: $2 real, $3 noise"; exit ;;
   -h|--help|help) sed -n '2,16p' "$0"; exit ;;
 esac
@@ -100,7 +107,7 @@ fi
 printf '%s\n' "$verdict"
 findings=$(grep -cE '^\s*- \[P[0-9]\]' <<<"$verdict" || true)
 p1=$(grep -cE '^\s*- \[P[01]\]' <<<"$verdict" || true)
-printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$(date '+%Y-%m-%d %H:%M')" "$(repo_name)" "$branch" "$pr" "$round" "$secs" "$findings" "$p1" "$out" >>"$runs"
+printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$(date '+%Y-%m-%d %H:%M')" "$(repo_name)" "$branch" "$pr" "$round" "$secs" "$findings" "$p1" "$out" "$(git rev-parse HEAD)" >>"$runs"
 echo
 echo "(round $round, $secs s, $findings finding(s); full output: $out)"
 echo "When the PR is settled: $0 mark ${pr:-<pr>} <real> <noise> \"note\""
