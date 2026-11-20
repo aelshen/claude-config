@@ -20,7 +20,14 @@ mkdir -p "$state"
 runs="$state/runs.tsv" marks="$state/marks.tsv"
 [ -f "$runs" ] || printf 'date\trepo\tbranch\tpr\tround\tsecs\tfindings\tp1\toutput\tsha\n' >"$runs"
 [ -f "$marks" ] || printf 'date\trepo\tpr\treal\tnoise\tnote\tsha\n' >"$marks"
+# a log from before the commit was recorded: its header gains the column's name once, its rows stay as they are
+for f in "$runs" "$marks"; do
+  IFS= read -r head <"$f" || true
+  case "$head" in *$'\tsha') ;; *) { printf '%s\tsha\n' "$head"; tail -n +2 "$f"; } >"$f.new" && mv "$f.new" "$f" ;; esac
+done
 
+# owner/repo of the origin, for asking GitHub about this checkout's own repository whatever GH_REPO or a default says
+repo_full() { local u; u=$(git remote get-url origin 2>/dev/null) || return 0; u="${u%.git}"; u="${u#*://*/}"; u="${u#*:}"; case "$u" in */*) echo "${u#"${u%/*/*}/"}" ;; esac; }
 # the origin's repo name, not the checkout's folder (a worktree is named after its branch)
 repo_name() { local u; u=$(git remote get-url origin 2>/dev/null) || u=$(git rev-parse --show-toplevel); u="${u%.git}"; echo "${u##*[/:]}"; }
 
@@ -47,11 +54,12 @@ case "${1:-}" in
     if [ "${1:-}" = -R ]; then full="$2"; name="${2##*/}"; shift 2; fi
     [ $# -ge 3 ] || { echo "usage: $0 mark [-R owner/repo] <pr> <real> <noise> [note]" >&2; exit 2; }
     name="${name:-$(repo_name)}"
-    # the PR's head as it is now: what the review was settled for (empty when gh cannot say; a tab in the note
-    # would shift the column, so it becomes a space)
+    # The PR's head as it is now: what the review was settled for (empty when gh cannot say). Asked of the same
+    # repository the row names. A tab or a line break in the note would shift or split the row: each becomes a space.
+    full="${full:-$(repo_full)}"
     sha=$(gh pr view "$1" ${full:+-R "$full"} --json headRefOid -q .headRefOid 2>/dev/null || true)
-    note="${4:-}"
-    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$(date '+%Y-%m-%d')" "$name" "$1" "$2" "$3" "${note//$'\t'/ }" "$sha" >>"$marks"
+    note="${4:-}"; note="${note//$'\t'/ }"; note="${note//$'\r'/ }"; note="${note//$'\n'/ }"
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$(date '+%Y-%m-%d')" "$name" "$1" "$2" "$3" "$note" "$sha" >>"$marks"
     echo "marked $name #$1: $2 real, $3 noise"; exit ;;
   -h|--help|help) sed -n '2,16p' "$0"; exit ;;
 esac
@@ -95,6 +103,8 @@ round=$(( $(awk -F'\t' -v r="$(repo_name)" -v b="$branch" '$2 == r && $3 == b' "
 [ "$round" -le 2 ] || echo "round $round: past two rounds, review again only to check a P1 fix" >&2
 
 out="$(mktemp "${TMPDIR:-/tmp}/codex-review.XXXXXX")"
+# the commit Codex is about to read: what the run is logged for, whatever is committed here while it works
+reviewed=$(git rev-parse HEAD)
 start=$(date +%s)
 # Codex writes its transcript to stderr and the verdict to stdout.
 codex review --base "$base" >"$out.verdict" 2>"$out" || { echo "codex review failed; output: $out" >&2; tail -20 "$out" >&2; exit 1; }
@@ -107,7 +117,8 @@ fi
 printf '%s\n' "$verdict"
 findings=$(grep -cE '^\s*- \[P[0-9]\]' <<<"$verdict" || true)
 p1=$(grep -cE '^\s*- \[P[01]\]' <<<"$verdict" || true)
-printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$(date '+%Y-%m-%d %H:%M')" "$(repo_name)" "$branch" "$pr" "$round" "$secs" "$findings" "$p1" "$out" "$(git rev-parse HEAD)" >>"$runs"
+printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$(date '+%Y-%m-%d %H:%M')" "$(repo_name)" "$branch" "$pr" "$round" "$secs" "$findings" "$p1" "$out" "$reviewed" >>"$runs"
+[ "$(git rev-parse HEAD)" = "$reviewed" ] || echo "note: HEAD moved while Codex worked; this run reviewed ${reviewed:0:7}, not what is checked out now" >&2
 echo
 echo "(round $round, $secs s, $findings finding(s); full output: $out)"
 echo "When the PR is settled: $0 mark ${pr:-<pr>} <real> <noise> \"note\""
