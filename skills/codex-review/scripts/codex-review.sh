@@ -14,6 +14,7 @@
 # Log: ${CODEX_REVIEW_STATE:-~/.claude/state/codex-review}/{runs,marks}.tsv. Each row ends with the commit it is
 # about (runs: the commit reviewed; marks: the PR's head when it was settled), so a reader can tell a review of this
 # commit from one of an earlier push. Rows written before that have no such column.
+# Each round's findings are also kept as text in <state>/reviews/<repo>-<pr>-r<round>.txt, headed by `repo:` and `commit:` lines.
 set -euo pipefail
 state="${CODEX_REVIEW_STATE:-$HOME/.claude/state/codex-review}"
 mkdir -p "$state"
@@ -115,6 +116,13 @@ else  # fallback: everything after the transcript's last line that is just "code
   verdict=$(awk '/^codex$/ { buf = ""; found = 1; next } found { buf = buf $0 "\n" } END { printf "%s", buf }' "$out")
 fi
 printf '%s\n' "$verdict"
+# Keep the round's findings as text, with the repository and commit they are of, for anything that shows them later
+# (Lane Desk's review page reads this folder: `<repo>-<pr>-r<round>.txt`). Only for a branch that has a PR.
+if [ -n "$pr" ]; then
+  origin=$(repo_full)
+  mkdir -p "$state/reviews"
+  { printf 'repo: %s\ncommit: %s\n\n' "${origin:-$(repo_name)}" "$reviewed"; printf '%s\n' "$verdict"; } >"$state/reviews/$(repo_name)-$pr-r$round.txt" || true
+fi
 findings=$(grep -cE '^\s*- \[P[0-9]\]' <<<"$verdict" || true)
 p1=$(grep -cE '^\s*- \[P[01]\]' <<<"$verdict" || true)
 printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$(date '+%Y-%m-%d %H:%M')" "$(repo_name)" "$branch" "$pr" "$round" "$secs" "$findings" "$p1" "$out" "$reviewed" >>"$runs"
