@@ -208,7 +208,7 @@ Track work the same way in every repo, following the `project-tracking` skill: e
 
 ## Peer review (all repos)
 
-Every PR gets a Codex review before merge, following the `codex-review` skill: `scripts/codex-review.sh` on the pushed branch (committed changes only; scope per repo in `.github/codex-review.env`), each finding verified against the code, a test or the data before acting, at most two rounds (a third only to check a P1 fix), a `## Codex review` section in the PR (found, fixed, declined and why), `codex-review.sh mark` once it settles, and merge only after CI has finished (the merge guard hook enforces both). It adds to tests and data measurements, never replaces them. Change the standard in the skill, never in one repo's copy.
+Every PR gets a review by a second model before merge, following the `codex-review` skill (Codex, or Neon when the owner has set `codex-review.sh use neon`; never switch by yourself): `scripts/codex-review.sh` on the pushed branch (committed changes only; scope per repo in `.github/codex-review.env`), each finding verified against the code, a test or the data before acting, at most two rounds (a third only to check a P1 fix), a `## Codex review` (or `## Peer review (Neon)`) section in the PR (found, fixed, declined and why), `codex-review.sh mark` once it settles, and merge only after CI has finished (the merge guard hook enforces both). It adds to tests and data measurements, never replaces them. Change the standard in the skill, never in one repo's copy.
 
 ## Secrets (all repos)
 
