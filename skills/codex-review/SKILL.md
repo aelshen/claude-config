@@ -1,6 +1,6 @@
 ---
 name: codex-review
-description: "Peer review by a second model (Codex, or Gemini Neon through agy: one command swaps them) on every PR before it merges, in every repo: one shared script, per-repo scope (.github/codex-review.env), findings verified before acting, a 'Codex review' section in the PR, a merge guard hook, and one log with a report. Use before merging any PR, when setting a repo up for it, or to see whether it earns its keep. Triggers on: codex review, peer review, second opinion review, before merge, review this PR with codex, is codex worth it, codex-review report, swap reviewer, use neon, review with gemini."
+description: "Peer review by a second model (Codex; Gemini Neon through agy only in repos the owner named) on every PR before it merges, in every repo: one shared script, per-repo scope (.github/codex-review.env), findings verified before acting, a 'Codex review' section in the PR, a merge guard hook, and one log with a report. Use before merging any PR, when setting a repo up for it, or to see whether it earns its keep. Triggers on: codex review, peer review, second opinion review, before merge, review this PR with codex, is codex worth it, codex-review report, swap reviewer, use neon."
 ---
 
 # Peer review by a second model
@@ -32,13 +32,14 @@ calls.
 
 ## Which reviewer
 
-`codex-review.sh use neon` (or `codex`) sets it for every repo on this machine at once; `use` alone says which.
-`REVIEWER=neon scripts/codex-review.sh` is one run. Nothing in a repo changes. Never switch by yourself: it is the owner's
-choice, and a failed run of one reviewer is never quietly given to the other.
+Codex, everywhere, unless the owner named the repo. **Neon is for lane-desk only** (owner, 2026-11-24: not confident Antigravity
+does not take the data). In a named repo `codex-review.sh use neon` / `use codex` switches that repo on this machine; `use`
+alone says which; `REVIEWER=codex` is one run. Never switch or allow a repo by yourself, and a failed run of one reviewer is
+never quietly given to the other.
 
 - **neon** is Gemini 4 Neon through `agy` (`scripts/reviewers/neon.sh`): it gets an export of the commit and the diff, and no
   shell. Its PR section is `## Peer review (Neon)`.
-- A repo's code goes to Google only after the owner allowed that repo: `codex-review.sh allow-google owner/repo`.
+- `allow-neon owner/repo` is the owner's word; `use neon` refuses without it, and there is no machine-wide switch.
 - **An empty answer is a failure, never a clean review**: agy exits 0 with status SUCCESS and no words when a tool is denied.
 - Compared once, on one commit (2026-11-24, lane-desk #240, a 170 kB diff): Codex 8 findings, all real. Neon, blind, 5 in
   9 min: 4 of them were Codex's (of its three P1s, one as P1, one as P3, one missed) and one was its own. One commit is not a measure:

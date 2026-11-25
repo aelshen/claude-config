@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Peer review before a PR merges: one shared copy for every repo (repos keep a stub in scripts/codex-review.sh).
-# Reviews the branch's COMMITTED changes against a base with the reviewer this machine is set to: `codex review`, or Gemini 4
+# Reviews the branch's COMMITTED changes against a base with `codex review`, or, only in a repo the owner has named, Gemini 4
 # Neon through agy (reviewers/neon.sh). The reviewer reads the repo's AGENTS.md (point it at the house review rules). Findings are leads: verify each, fix it or say in the PR why not.
 #
 #   codex-review.sh [base]                    review this branch (base: origin/main); logs the run
 #   codex-review.sh mark [-R owner/repo] <pr> <real> <noise> [note]   record what the findings turned out to be
 #   codex-review.sh report [days]             per repo: PRs, rounds, findings, real, noise, time; and per reviewer
-#   codex-review.sh use [codex|neon]          the reviewer of every repo on this machine (nothing: say which). REVIEWER=neon <command>: that run only
-#   codex-review.sh allow-google [owner/repo] let a repo's committed code go to Google (neon): once per repo, on the owner's word
+#   codex-review.sh use [codex|neon]          the reviewer of THIS repo on this machine (nothing: say which). REVIEWER=codex before a command: that run only
+#   codex-review.sh allow-neon owner/repo     the owner's word that this repo's committed code may go to Google; `use neon` refuses without it
 #
 # Per-repo config, .github/codex-review.env (no file = review everything):
 #   CODEX_SCOPE=all|risky|off     risky: review only when a changed file matches CODEX_PATHS
@@ -53,20 +53,28 @@ report() {
 }
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-allowed="$state/google-repos"
+allowed="$state/neon-allowed" chosen="$state/neon-repos"   # owner/repo, one a line
 known() { case "$1" in codex|neon) ;; *) echo "unknown reviewer: $1 (codex or neon)" >&2; exit 2 ;; esac; }
-reviewer="${REVIEWER:-$(cat "$state/reviewer" 2>/dev/null || true)}"; reviewer="${reviewer:-codex}"
+listed() { [ -n "$1" ] && grep -qixF "$1" "$2" 2>/dev/null; }
+# codex unless this repo was switched: there is no machine-wide switch, so no other repo's code can go anywhere new
+reviewer=codex; listed "$(repo_full)" "$chosen" && reviewer=neon
+reviewer="${REVIEWER:-$reviewer}"
 
 case "${1:-}" in
   use)
     if [ -z "${2:-}" ]; then echo "$reviewer"; exit; fi
-    known "$2"; printf '%s\n' "$2" >"$state/reviewer.new" && mv "$state/reviewer.new" "$state/reviewer"
-    echo "reviewer on this machine: $2"; exit ;;
-  allow-google)
-    r="${2:-$(repo_full)}"
-    [[ "$r" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || { echo "usage: $0 allow-google owner/repo" >&2; exit 2; }
-    grep -qixF "$r" "$allowed" 2>/dev/null || printf '%s\n' "$r" >>"$allowed"
-    echo "allowed to go to Google: $r"; exit ;;
+    known "$2"; r=$(repo_full); [ -n "$r" ] || { echo "not a checkout with a GitHub origin" >&2; exit 2; }
+    if [ "$2" = neon ]; then
+      listed "$r" "$allowed" || { echo "$r is not allowed to go to Google: that is the owner's word to give ($0 allow-neon $r)" >&2; exit 1; }
+      listed "$r" "$chosen" || printf '%s\n' "$r" >>"$chosen"
+    elif [ -f "$chosen" ]; then
+      grep -vixF "$r" "$chosen" >"$chosen.new" || true; mv "$chosen.new" "$chosen"
+    fi
+    echo "reviewer of $r on this machine: $2"; exit ;;
+  allow-neon)
+    r="${2:-}"; [[ "$r" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || { echo "usage: $0 allow-neon owner/repo" >&2; exit 2; }
+    listed "$r" "$allowed" || printf '%s\n' "$r" >>"$allowed"
+    echo "allowed to go to Google (Antigravity): $r"; exit ;;
   report) shift; report "$@"; exit ;;
   mark)  # mark [-R owner/repo] <pr> <real> <noise> [note]: -R when the PR is in another repo than this checkout
     shift; name=""
@@ -122,8 +130,8 @@ if [ -n "$skip" ]; then
   exit 0
 fi
 
-if [ "$reviewer" = neon ] && ! grep -qixF "$(repo_full)" "$allowed" 2>/dev/null; then
-  echo "$(repo_full) is not allowed to go to Google, so nothing was sent. Ask the owner, then: $0 allow-google (or REVIEWER=codex for this run)." >&2
+if [ "$reviewer" = neon ] && ! listed "$(repo_full)" "$allowed"; then
+  echo "$(repo_full) is not allowed to go to Google, so nothing was sent. (REVIEWER=codex reviews with Codex.)" >&2
   exit 1
 fi
 branch=$(git branch --show-current)
