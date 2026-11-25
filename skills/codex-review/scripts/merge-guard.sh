@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # PreToolUse hook (Bash): before `gh pr merge` in a repo that has .github/codex-review.env, refuse when the PR body has
-# no "Codex review" section (a "skipped (...)" line counts), or when its CI checks are still running or not yet
+# no "Codex review" or "Peer review" section (a "skipped (...)" line counts), or when its CI checks are still running or not yet
 # registered (right after a push `gh pr checks --watch` returns at once, so a merge can beat CI). Anything else passes.
 # Override for one command: start it with CODEX_GUARD=off.
 input=$(cat)
@@ -41,7 +41,7 @@ pr="${target:-this branch}"
 view=(gh pr view ${target:+"$target"} ${repo:+-R "$repo"})
 body=$("${view[@]}" --json body -q .body 2>/dev/null) || {
   echo "Blocked: could not read PR $pr${repo:+ in $repo} to check its Codex review and CI." >&2; exit 2; }
-if ! grep -qi 'codex review' <<<"$body"; then
+if ! grep -qiE '(codex|peer) review' <<<"$body"; then
   echo "Blocked: PR $pr has no \"Codex review\" section. Run scripts/codex-review.sh, verify the findings, add the section (or \"Codex review: skipped (...)\"), then merge." >&2
   exit 2
 fi

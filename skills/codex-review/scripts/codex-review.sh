@@ -1,31 +1,35 @@
 #!/usr/bin/env bash
-# Codex peer review before a PR merges: one shared copy for every repo (repos keep a stub in scripts/codex-review.sh).
-# Reviews the branch's COMMITTED changes against a base with `codex review`; Codex reads the repo's AGENTS.md (point it
-# at the house review rules). Findings are leads: verify each, fix it or say in the PR why not.
+# Peer review before a PR merges: one shared copy for every repo (repos keep a stub in scripts/codex-review.sh).
+# Reviews the branch's COMMITTED changes against a base with `codex review`, or, only in a repo the owner has named, Gemini 4
+# Neon through agy (reviewers/neon.sh). The reviewer reads the repo's AGENTS.md (point it at the house review rules). Findings are leads: verify each, fix it or say in the PR why not.
 #
 #   codex-review.sh [base]                    review this branch (base: origin/main); logs the run
 #   codex-review.sh mark [-R owner/repo] <pr> <real> <noise> [note]   record what the findings turned out to be
-#   codex-review.sh report [days]             per repo: PRs, rounds, findings, real, noise, time
+#   codex-review.sh report [days]             per repo: PRs, rounds, findings, real, noise, time; and per reviewer
+#   codex-review.sh use [codex|neon]          the reviewer of THIS repo on this machine (nothing: say which). REVIEWER=codex before a command: that run only
+#   codex-review.sh allow-neon owner/repo     the owner's word that this repo's committed code may go to Google; `use neon` refuses without it
 #
 # Per-repo config, .github/codex-review.env (no file = review everything):
 #   CODEX_SCOPE=all|risky|off     risky: review only when a changed file matches CODEX_PATHS
 #   CODEX_PATHS="supabase/* server/identity.py"   bash patterns; * also matches /
 #   CODEX_EXCLUDE="tests/golden/* app/src/i18n/*"  changes only here are never reviewed
 # Log: ${CODEX_REVIEW_STATE:-~/.claude/state/codex-review}/{runs,marks}.tsv. Each row ends with the commit it is
-# about (runs: the commit reviewed; marks: the PR's head when it was settled), so a reader can tell a review of this
-# commit from one of an earlier push. Rows written before that have no such column.
+# about (runs: the commit reviewed, then the reviewer; marks: the PR's head when it was settled), so a reader can tell a review of this
+# commit from one of an earlier push. Rows written before that have no such columns (no reviewer: codex).
 # Each round's findings are also kept as text in <state>/reviews/<repo>-<pr>-r<round>.txt, headed by `repo:` and `commit:` lines.
 set -euo pipefail
 state="${CODEX_REVIEW_STATE:-$HOME/.claude/state/codex-review}"
 mkdir -p "$state"
 runs="$state/runs.tsv" marks="$state/marks.tsv"
-[ -f "$runs" ] || printf 'date\trepo\tbranch\tpr\tround\tsecs\tfindings\tp1\toutput\tsha\n' >"$runs"
+[ -f "$runs" ] || printf 'date\trepo\tbranch\tpr\tround\tsecs\tfindings\tp1\toutput\tsha\treviewer\n' >"$runs"
 [ -f "$marks" ] || printf 'date\trepo\tpr\treal\tnoise\tnote\tsha\n' >"$marks"
 # a log from before the commit was recorded: its header gains the column's name once, its rows stay as they are
 for f in "$runs" "$marks"; do
   IFS= read -r head <"$f" || true
-  case "$head" in *$'\tsha') ;; *) { printf '%s\tsha\n' "$head"; tail -n +2 "$f"; } >"$f.new" && mv "$f.new" "$f" ;; esac
+  case "$head" in *$'\tsha'|*$'\tsha\treviewer') ;; *) { printf '%s\tsha\n' "$head"; tail -n +2 "$f"; } >"$f.new" && mv "$f.new" "$f" ;; esac
 done
+IFS= read -r head <"$runs" || true
+case "$head" in *$'\treviewer') ;; *) { printf '%s\treviewer\n' "$head"; tail -n +2 "$runs"; } >"$runs.new" && mv "$runs.new" "$runs" ;; esac
 
 # owner/repo of the origin, for asking GitHub about this checkout's own repository whatever GH_REPO or a default says
 repo_full() { local u; u=$(git remote get-url origin 2>/dev/null) || return 0; u="${u%.git}"; u="${u#*://*/}"; u="${u#*:}"; case "$u" in */*) echo "${u#"${u%/*/*}/"}" ;; esac; }
@@ -37,17 +41,40 @@ report() {
   since=$(date -v-"${days}"d '+%Y-%m-%d' 2>/dev/null || date -d "-$days days" '+%Y-%m-%d')
   awk -F'\t' -v since="$since" '
     FNR == 1 { next }
-    FILENAME ~ /runs/ && $1 >= since { r[$2]++; s[$2] += $6; f[$2] += $7; p1[$2] += $8; if ($4 != "") prs[$2 SUBSEP $4] = 1; repos[$2] = 1 }
+    FILENAME ~ /runs/ && $1 >= since { by = $11 == "" ? "codex" : $11; R[by]++; F[by] += $7; P[by] += $8; S[by] += $6; r[$2]++; s[$2] += $6; f[$2] += $7; p1[$2] += $8; if ($4 != "") prs[$2 SUBSEP $4] = 1; repos[$2] = 1 }
     FILENAME ~ /marks/ && $1 >= since { real[$2] += $4; noise[$2] += $5; m[$2]++; repos[$2] = 1 }
     END {
       printf "%-14s %5s %6s %8s %4s %5s %6s %8s\n", "repo", "PRs", "rounds", "findings", "P1", "real", "noise", "avg secs"
       for (k in prs) { split(k, a, SUBSEP); n[a[1]]++ }
       for (x in repos) printf "%-14s %5d %6d %8d %4d %5d %6d %8d\n", x, n[x], r[x], f[x], p1[x], real[x], noise[x], r[x] ? s[x] / r[x] : 0
+      for (b in R) printf "by %s: %d rounds, %d findings, %d P1, %d s on average\n", b, R[b], F[b], P[b], S[b] / R[b]
       print "(findings and P1 are counted from the runs; real and noise from `mark`, once per PR)"
     }' "$runs" "$marks"
 }
 
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+allowed="$state/neon-allowed" chosen="$state/neon-repos"   # owner/repo, one a line
+known() { case "$1" in codex|neon) ;; *) echo "unknown reviewer: $1 (codex or neon)" >&2; exit 2 ;; esac; }
+listed() { [ -n "$1" ] && grep -qixF "$1" "$2" 2>/dev/null; }
+# codex unless this repo was switched: there is no machine-wide switch, so no other repo's code can go anywhere new
+reviewer=codex; listed "$(repo_full)" "$chosen" && reviewer=neon
+reviewer="${REVIEWER:-$reviewer}"
+
 case "${1:-}" in
+  use)
+    if [ -z "${2:-}" ]; then echo "$reviewer"; exit; fi
+    known "$2"; r=$(repo_full); [ -n "$r" ] || { echo "not a checkout with a GitHub origin" >&2; exit 2; }
+    if [ "$2" = neon ]; then
+      listed "$r" "$allowed" || { echo "$r is not allowed to go to Google: that is the owner's word to give ($0 allow-neon $r)" >&2; exit 1; }
+      listed "$r" "$chosen" || printf '%s\n' "$r" >>"$chosen"
+    elif [ -f "$chosen" ]; then
+      grep -vixF "$r" "$chosen" >"$chosen.new" || true; mv "$chosen.new" "$chosen"
+    fi
+    echo "reviewer of $r on this machine: $2"; exit ;;
+  allow-neon)
+    r="${2:-}"; [[ "$r" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || { echo "usage: $0 allow-neon owner/repo" >&2; exit 2; }
+    listed "$r" "$allowed" || printf '%s\n' "$r" >>"$allowed"
+    echo "allowed to go to Google (Antigravity): $r"; exit ;;
   report) shift; report "$@"; exit ;;
   mark)  # mark [-R owner/repo] <pr> <real> <noise> [note]: -R when the PR is in another repo than this checkout
     shift; name=""
@@ -62,12 +89,17 @@ case "${1:-}" in
     note="${4:-}"; note="${note//$'\t'/ }"; note="${note//$'\r'/ }"; note="${note//$'\n'/ }"
     printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$(date '+%Y-%m-%d')" "$name" "$1" "$2" "$3" "$note" "$sha" >>"$marks"
     echo "marked $name #$1: $2 real, $3 noise"; exit ;;
-  -h|--help|help) sed -n '2,16p' "$0"; exit ;;
+  -h|--help|help) sed -n '2,18p' "$0"; exit ;;
 esac
 
 cd "$(git rev-parse --show-toplevel)"
 base="${1:-origin/main}"
-command -v codex >/dev/null || { echo "codex CLI not found (npm i -g @openai/codex, then codex login)" >&2; exit 1; }
+known "$reviewer"
+if [ "$reviewer" = codex ]; then
+  command -v codex >/dev/null || { echo "codex CLI not found (npm i -g @openai/codex, then codex login)" >&2; exit 1; }
+else
+  for t in agy jq; do command -v $t >/dev/null || { echo "$t not found (the neon reviewer needs it)" >&2; exit 1; }; done
+fi
 # Only committed work leaves this machine: refuse a dirty tree (untracked files never go).
 [ -z "$(git status --porcelain --untracked-files=no)" ] || { echo "commit or stash your changes first: only the committed diff is reviewed" >&2; exit 1; }
 git fetch -q origin
@@ -98,17 +130,26 @@ if [ -n "$skip" ]; then
   exit 0
 fi
 
+if [ "$reviewer" = neon ] && ! listed "$(repo_full)" "$allowed"; then
+  echo "$(repo_full) is not allowed to go to Google, so nothing was sent. (REVIEWER=codex reviews with Codex.)" >&2
+  exit 1
+fi
 branch=$(git branch --show-current)
 pr=$(gh pr view --json number -q .number 2>/dev/null || true)
 round=$(( $(awk -F'\t' -v r="$(repo_name)" -v b="$branch" '$2 == r && $3 == b' "$runs" | wc -l) + 1 ))
 [ "$round" -le 2 ] || echo "round $round: past two rounds, review again only to check a P1 fix" >&2
 
 out="$(mktemp "${TMPDIR:-/tmp}/codex-review.XXXXXX")"
-# the commit Codex is about to read: what the run is logged for, whatever is committed here while it works
+# the commit the reviewer is about to read: what the run is logged for, whatever is committed here while it works
 reviewed=$(git rev-parse HEAD)
 start=$(date +%s)
-# Codex writes its transcript to stderr and the verdict to stdout.
-codex review --base "$base" >"$out.verdict" 2>"$out" || { echo "codex review failed; output: $out" >&2; tail -20 "$out" >&2; exit 1; }
+if [ "$reviewer" = neon ]; then
+  "$here/reviewers/neon.sh" "$base" "$reviewed" >"$out.verdict" 2>"$out" && [ -s "$out.verdict" ] ||
+    { echo "neon review failed (NOT a clean review); output: $out" >&2; tail -20 "$out" >&2; exit 1; }
+else
+  # Codex writes its transcript to stderr and the verdict to stdout.
+  codex review --base "$base" >"$out.verdict" 2>"$out" || { echo "codex review failed; output: $out" >&2; tail -20 "$out" >&2; exit 1; }
+fi
 secs=$(( $(date +%s) - start ))
 if [ -s "$out.verdict" ]; then
   verdict=$(cat "$out.verdict")
@@ -125,8 +166,8 @@ if [ -n "$pr" ]; then
 fi
 findings=$(grep -cE '^\s*- \[P[0-9]\]' <<<"$verdict" || true)
 p1=$(grep -cE '^\s*- \[P[01]\]' <<<"$verdict" || true)
-printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$(date '+%Y-%m-%d %H:%M')" "$(repo_name)" "$branch" "$pr" "$round" "$secs" "$findings" "$p1" "$out" "$reviewed" >>"$runs"
-[ "$(git rev-parse HEAD)" = "$reviewed" ] || echo "note: HEAD moved while Codex worked; this run reviewed ${reviewed:0:7}, not what is checked out now" >&2
+printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$(date '+%Y-%m-%d %H:%M')" "$(repo_name)" "$branch" "$pr" "$round" "$secs" "$findings" "$p1" "$out" "$reviewed" "$reviewer" >>"$runs"
+[ "$(git rev-parse HEAD)" = "$reviewed" ] || echo "note: HEAD moved while $reviewer worked; this run reviewed ${reviewed:0:7}, not what is checked out now" >&2
 echo
-echo "(round $round, $secs s, $findings finding(s); full output: $out)"
+echo "($reviewer, round $round, $secs s, $findings finding(s); full output: $out)"
 echo "When the PR is settled: $0 mark ${pr:-<pr>} <real> <noise> \"note\""
