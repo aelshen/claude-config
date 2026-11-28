@@ -16,8 +16,11 @@ calls.
 
 ## The flow (every PR)
 
-1. Commit, push, open the PR. Then run `scripts/codex-review.sh` on the branch (the stub runs
-   `~/.claude/skills/codex-review/scripts/codex-review.sh`). It refuses a dirty tree: only committed work leaves the machine.
+1. Commit, then run `scripts/codex-review.sh` on the branch BEFORE pushing (the stub runs
+   `~/.claude/skills/codex-review/scripts/codex-review.sh`; it reviews the local commits against `origin/main` and needs
+   no push). It refuses a dirty tree: only committed work leaves the machine. Fix rounds stay local too: **push once**,
+   when the review has settled and the local checks pass, then open the PR. Every push is a full CI run of paid
+   Actions minutes (CLAUDE.md, "CI minutes").
 2. **Findings are leads.** Check each against the code, a test or the data. Fix it, or decline it in the PR with the
    reason. Never apply a finding unread.
 3. If you changed code, run it again (round 2). Stop there; a round 3 only to check a P1 fix. Disagreements that

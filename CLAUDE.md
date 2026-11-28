@@ -240,6 +240,16 @@ Every `gh` call spends the owner's API quota: 5,000 GraphQL requests an hour per
 - **Long waits go in the background** (`run_in_background`), and you stop them (TaskStop) once the result is in or the work moved on; a wait you no longer need is still spending quota.
 - **Quota check:** `gh api graphql -f query='{rateLimit{remaining used resetAt}}'` (the REST `rate_limit` endpoint misreports it). Out of quota: wait for `resetAt`, don't retry in a loop.
 
+## CI minutes (all repos)
+
+GitHub Actions minutes on private repos are billed and capped. On 2026-11-27 Lane Desk had burned ~2,300 minutes in six days (one PR pushed 2-4 times, every merge re-running the whole suite on main, all of it already run locally first) and Actions stopped on billing. Every repo, every session:
+
+- **Push once per PR.** Commit locally, run the checks and the peer review locally (`codex-review.sh` reviews the local branch against `origin/main`; it needs no push), fix, and push only when the PR is ready. Review-fix rounds stay local; push the result once at the end.
+- **CI runs on pull requests only**, never again on `push` to main after a merge (squash merges onto an up-to-date base were already checked). Changes that touch only docs, `*.md`, mockups or other non-app folders skip CI with `paths-ignore`; keep a light always-on check (e.g. the issue link) so the merge guard sees a check.
+- **Before adding or changing a workflow**, say what it costs per PR in minutes. Prefer one job; no matrix unless asked; cache dependencies.
+- **When Actions cannot run** (billing, outage): run the workflow's own steps locally on the head commit, record them in the PR body under `## CI`, and with the owner's yes merge with the guard's own override `CODEX_GUARD=off gh pr merge ...` (never through the API around the guard).
+- **Audit** a repo's workflows the first time you work in it this week: a `push: branches: [main]` trigger beside `pull_request`, or no `paths-ignore`, is a finding to fix.
+
 ## Communication Preferences
 
 - Be concise and direct
